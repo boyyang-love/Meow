@@ -21,11 +21,7 @@ let _sharedModelContainer: ModelContainer = {
 
 @main
 struct MeowApp: App {
-    private let appDelegate: AppDelegate = {
-        let d = AppDelegate()
-        NSApplication.shared.delegate = d
-        return d
-    }()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
  
     var sharedModelContainer: ModelContainer { _sharedModelContainer }
 
