@@ -14,6 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 由 menubar「退出」按钮设为 true，表示本次是真正的退出
     static var shouldTerminate = false
 
+    /// 静态引用，供菜单等非 App 内视图直接访问
+    static weak var shared: AppDelegate?
+
+    override init() {
+        super.init()
+        Self.shared = self
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         // 在 SwiftUI 设置场景之前强制 regular 模式（新版 macOS 中
         // MenuBarExtra + WindowGroup 共存时可能默认走 accessory）
@@ -34,30 +42,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               NSApp.activationPolicy().rawValue, NSApp.windows.count, NSApp.isHidden)
         NSApp.setActivationPolicy(.regular)
 
+        // 先 unhide（如果被 NSApp.hide 隐藏过），否则窗口恢复后会停留在非活跃状态
+        if NSApp.isHidden { NSApp.unhide(nil) }
+
         // 恢复已有窗口
-        if !NSApp.windows.isEmpty {
-            if NSApp.isHidden { NSApp.unhide(nil) }
-            for window in NSApp.windows {
-                window.makeKeyAndOrderFront(nil)
-            }
-        } else {
-            // 窗口已被用户关闭 → 用 AppKit 重建一个
-            NSLog("[AppDelegate] no windows, creating new one")
-            let hostingCtrl = NSHostingController(
-                rootView: ContentView().modelContainer(_sharedModelContainer)
-            )
-            let window = NSWindow(contentViewController: hostingCtrl)
-            window.title = "Meow"
-            window.setFrameAutosaveName("MainWindow")
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            window.center()
-            window.makeKeyAndOrderFront(nil)
-        }
+        let win = NSApp.windows.first(where: { $0.isVisible || $0.isMiniaturized })
+            ?? NSApp.windows.first  // hidden window after hide/unhide
+            ?? createMainWindow()   // all windows closed by user
+        win.makeKeyAndOrderFront(nil)
 
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSLog("[AppDelegate] showMainWindow done isHidden=%d", NSApp.isHidden)
     }
  
+    private func createMainWindow() -> NSWindow {
+        let hostingCtrl = NSHostingController(
+            rootView: ContentView().modelContainer(_sharedModelContainer)
+        )
+        let window = NSWindow(contentViewController: hostingCtrl)
+        window.title = "Meow"
+        window.setFrameAutosaveName("MainWindow")
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.center()
+        return window
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if Self.shouldTerminate {
             NSLog("[AppDelegate] shouldTerminate: returning NOW")

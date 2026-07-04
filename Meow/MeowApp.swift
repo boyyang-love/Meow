@@ -84,18 +84,7 @@ private struct MeowMenuView: View {
     }
 
     private func showMainWindow() {
-        let delegate = NSApplication.shared.delegate
-        NSLog("[Menu] delegate=\(String(describing: delegate)) type=\(type(of: delegate as Any))")
-        if let ad = delegate as? AppDelegate {
-            NSLog("[Menu] calling AppDelegate.showMainWindow")
-            ad.showMainWindow()
-        } else {
-            NSLog("[Menu] cast to AppDelegate FAILED")
-            // Fallback: 直接激活
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate(ignoringOtherApps: true)
-            for w in NSApp.windows { w.makeKeyAndOrderFront(nil) }
-        }
+        AppDelegate.shared?.showMainWindow()
     }
 
     private func navigateTo(_ section: SidebarSection) {
