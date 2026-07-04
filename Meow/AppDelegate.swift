@@ -23,29 +23,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("[AppDelegate] didFinishLaunching")
         GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
+        showMainWindow()
+        NSLog("[AppDelegate] post-didFinishLaunching windows=%ld isHidden=%d", NSApp.windows.count, NSApp.isHidden)
     }
 
     /// 显示主窗口（创建或恢复）
     func showMainWindow() {
-        NSLog("[AppDelegate] showMainWindow, currentPolicy=%ld", NSApp.activationPolicy().rawValue)
+        NSLog("[AppDelegate] showMainWindow policy=%ld windows=%ld isHidden=%d",
+              NSApp.activationPolicy().rawValue, NSApp.windows.count, NSApp.isHidden)
         NSApp.setActivationPolicy(.regular)
-        NSApp.unhide(nil)
-        // 将所有窗口带到前台
+        if NSApp.isHidden { NSApp.unhide(nil) }
         for window in NSApp.windows {
             window.makeKeyAndOrderFront(nil)
         }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        NSLog("[AppDelegate] showMainWindow done isHidden=%d", NSApp.isHidden)
     }
  
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if Self.shouldTerminate {
+            NSLog("[AppDelegate] shouldTerminate: returning NOW")
             return .terminateNow
         }
 
-        NSLog("[AppDelegate] Dock quit, hiding to menu bar, windows=%ld", sender.windows.count)
+        NSLog("[AppDelegate] shouldTerminate: Dock quit, hiding to menu bar, windows=%ld", sender.windows.count)
         // 先隐藏窗口，再移除 Dock 图标
-        sender.hide(nil)
         NSApp.setActivationPolicy(.accessory)
+        sender.hide(nil)
 
+        NSLog("[AppDelegate] shouldTerminate: done, isHidden=%d", NSApp.isHidden)
         return .terminateCancel
     }
 }
