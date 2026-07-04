@@ -38,21 +38,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 显示主窗口（创建或恢复）
     func showMainWindow() {
-        NSLog("[AppDelegate] showMainWindow policy=%ld windows=%ld isHidden=%d",
-              NSApp.activationPolicy().rawValue, NSApp.windows.count, NSApp.isHidden)
+        // 1) 先 unhide（setPolicy(.regular) 会消除 isHidden，导致 unhide 空转）
+        if NSApp.isHidden { NSApp.unhide(nil) }
+        // 2) 再回复 Dock 图标
         NSApp.setActivationPolicy(.regular)
 
-        // 先 unhide（如果被 NSApp.hide 隐藏过），否则窗口恢复后会停留在非活跃状态
-        if NSApp.isHidden { NSApp.unhide(nil) }
-
-        // 恢复已有窗口
+        // 3) 找窗口：可见/最小化 → 隐藏 → 重建
         let win = NSApp.windows.first(where: { $0.isVisible || $0.isMiniaturized })
             ?? NSApp.windows.first  // hidden window after hide/unhide
             ?? createMainWindow()   // all windows closed by user
         win.makeKeyAndOrderFront(nil)
 
         NSApplication.shared.activate(ignoringOtherApps: true)
-        NSLog("[AppDelegate] showMainWindow done isHidden=%d", NSApp.isHidden)
+        NSLog("[AppDelegate] showMainWindow done policy=%ld win=%@", NSApp.activationPolicy().rawValue, win)
     }
  
     private func createMainWindow() -> NSWindow {
@@ -73,12 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateNow
         }
 
-        NSLog("[AppDelegate] shouldTerminate: Dock quit, hiding to menu bar, windows=%ld", sender.windows.count)
-        // 先隐藏窗口，再移除 Dock 图标
-        NSApp.setActivationPolicy(.accessory)
+        // 1) 先隐藏窗口
         sender.hide(nil)
+        // 2) 再移除 Dock 图标（与 showMainWindow 对称）
+        NSApp.setActivationPolicy(.accessory)
 
-        NSLog("[AppDelegate] shouldTerminate: done, isHidden=%d", NSApp.isHidden)
+        NSLog("[AppDelegate] shouldTerminate: done isHidden=%d", NSApp.isHidden)
         return .terminateCancel
     }
 }
