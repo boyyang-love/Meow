@@ -8,41 +8,36 @@
 import SwiftUI
 import SwiftData
 
+/// 全局共享的 ModelContainer（供 AppDelegate 和 SwiftUI 场景共用）
+let _sharedModelContainer: ModelContainer = {
+    let schema = Schema([
+        ShortcutItem.self,
+    ])
+    let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+
+    do {
+        return try ModelContainer(for: schema, configurations: [modelConfiguration])
+    } catch {
+        fatalError("Could not create ModelContainer: \(error)")
+    }
+}()
+
 @main
 struct MeowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
  
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            ShortcutItem.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    let modelContainer = _sharedModelContainer
 
     var body: some Scene {
-        // 主窗口
-        WindowGroup {
-            ContentView()
-                .onAppear {
-                    GlobalShortcutMonitor.shared.start(with: sharedModelContainer)
-                }
-        }
-        .commands {
-            AppMenuCommands()
-        }
-        .modelContainer(sharedModelContainer)
-
         // 菜单栏图标
         MenuBarExtra("Meow", systemImage: "pawprint.fill") {
             MeowMenuView()
         }
-        .modelContainer(sharedModelContainer)
+        .menuBarExtraStyle(.menu)
+        .commands {
+            AppMenuCommands()
+        }
+        .modelContainer(modelContainer)
     }
 }
 
@@ -84,13 +79,7 @@ private struct MeowMenuView: View {
     }
 
     private func showMainWindow() {
-        NSApp.setActivationPolicy(.regular)
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        // 找第一个窗口（不论可见/隐藏），如有必要恢复并显示
-        if let window = NSApplication.shared.windows.first {
-            window.deminiaturize(nil)
-            window.makeKeyAndOrderFront(nil)
-        }
+        (NSApplication.shared.delegate as? AppDelegate)?.showMainWindow()
     }
 
     private func navigateTo(_ section: SidebarSection) {
