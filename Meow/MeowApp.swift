@@ -10,6 +10,8 @@ import SwiftData
 
 @main
 struct MeowApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+ 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ShortcutItem.self,
@@ -76,11 +78,13 @@ private struct MeowMenuView: View {
         Divider()
 
         Button("退出") {
+            AppDelegate.shouldTerminate = true
             NSApplication.shared.terminate(nil)
         }
     }
 
     private func showMainWindow() {
+        NSApp.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
         if let window = NSApplication.shared.windows.first(where: { $0.isVisible || $0.isMiniaturized }) {
             window.deminiaturize(nil)
