@@ -20,8 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Dock/CMD+Q → 隐藏到后台
         NSApp.setActivationPolicy(.accessory)
 
-        // 关闭所有窗口
-        sender.windows.forEach { $0.close() }
+        // 隐藏所有窗口（不销毁，保留窗口对象以便从 menubar 恢复）
+        sender.windows.forEach { $0.orderOut(nil) }
 
         return .terminateCancel
     }

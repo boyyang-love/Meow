@@ -24,10 +24,15 @@ struct ShortcutsView: View {
     @State private var editBackup: [ShortcutItem.ID: (String, Bool, Bool, Bool, Bool)] = [:]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            content
-        }
+        content
+            .toolbar {
+                ToolbarItem {
+                    Button(action: pickAppAndAdd) {
+                        Label("添加应用程序快捷键", systemImage: "plus")
+                    }
+                    .help("添加快捷键")
+                }
+            }
         .onChange(of: editingID) { old, new in
             if new != nil {
                 // 编辑开始 → 暂停快捷键监听
@@ -87,30 +92,6 @@ struct ShortcutsView: View {
             }
         }
     }
-
-    // MARK: - 顶栏
-
-    private var header: some View {
-        HStack {
-            Text("快捷键")
-                .font(.title)
-                .fontWeight(.semibold)
-
-            Spacer()
-
-            Button(action: pickAppAndAdd) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.tint)
-            }
-            .buttonStyle(.borderless)
-            .help("添加应用程序快捷键")
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - 内容区域
 
     @ViewBuilder
     private var content: some View {

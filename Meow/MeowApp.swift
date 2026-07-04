@@ -86,7 +86,8 @@ private struct MeowMenuView: View {
     private func showMainWindow() {
         NSApp.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
-        if let window = NSApplication.shared.windows.first(where: { $0.isVisible || $0.isMiniaturized }) {
+        // 找第一个窗口（不论可见/隐藏），如有必要恢复并显示
+        if let window = NSApplication.shared.windows.first {
             window.deminiaturize(nil)
             window.makeKeyAndOrderFront(nil)
         }
