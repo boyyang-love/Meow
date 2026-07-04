@@ -13,6 +13,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 由 menubar「退出」按钮设为 true，表示本次是真正的退出
     static var shouldTerminate = false
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // 在 SwiftUI 设置场景之前强制 regular 模式（新版 macOS 中
+        // MenuBarExtra + WindowGroup 共存时可能默认走 accessory）
+        NSApp.setActivationPolicy(.regular)
+        NSLog("[AppDelegate] willFinishLaunching, forced regular")
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("[AppDelegate] didFinishLaunching")
         GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
