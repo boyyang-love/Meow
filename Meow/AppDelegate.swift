@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftData
+import SwiftUI
 
 /// 应用委托：拦截 Dock/CMD+Q 的退出，改为隐藏到后台（menubar 模式）
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -32,10 +33,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSLog("[AppDelegate] showMainWindow policy=%ld windows=%ld isHidden=%d",
               NSApp.activationPolicy().rawValue, NSApp.windows.count, NSApp.isHidden)
         NSApp.setActivationPolicy(.regular)
-        if NSApp.isHidden { NSApp.unhide(nil) }
-        for window in NSApp.windows {
+
+        // 恢复已有窗口
+        if !NSApp.windows.isEmpty {
+            if NSApp.isHidden { NSApp.unhide(nil) }
+            for window in NSApp.windows {
+                window.makeKeyAndOrderFront(nil)
+            }
+        } else {
+            // 窗口已被用户关闭 → 用 AppKit 重建一个
+            NSLog("[AppDelegate] no windows, creating new one")
+            let hostingCtrl = NSHostingController(
+                rootView: ContentView().modelContainer(_sharedModelContainer)
+            )
+            let window = NSWindow(contentViewController: hostingCtrl)
+            window.title = "Meow"
+            window.setFrameAutosaveName("MainWindow")
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.center()
             window.makeKeyAndOrderFront(nil)
         }
+
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSLog("[AppDelegate] showMainWindow done isHidden=%d", NSApp.isHidden)
     }
