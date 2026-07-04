@@ -45,6 +45,12 @@ final class GlobalShortcutMonitor {
     private(set) var isRunning = false
     private var retryTimer: DispatchSourceTimer?
     private var notificationObserver: NSObjectProtocol?
+    private var _isMonitoringEnabled = true
+    private let enableLock = NSLock()
+
+    func pause() { enableLock.withLock { _isMonitoringEnabled = false }; log.info("⏸️ 监听暂停") }
+    func resume() { enableLock.withLock { _isMonitoringEnabled = true }; log.info("▶️ 监听恢复") }
+
 
     private init() {}
 
@@ -116,6 +122,8 @@ final class GlobalShortcutMonitor {
     // MARK: - 事件匹配
 
     private func handleCGEvent(_ cgEvent: CGEvent) -> Bool {
+        guard enableLock.withLock({ _isMonitoringEnabled }) else { return false }
+
         guard let nsEvent = NSEvent(cgEvent: cgEvent) else { return false }
         guard let chars = nsEvent.charactersIgnoringModifiers?.lowercased() else { return false }
         let flags = nsEvent.modifierFlags

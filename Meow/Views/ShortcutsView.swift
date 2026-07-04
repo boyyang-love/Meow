@@ -17,19 +17,60 @@ struct ShortcutsView: View {
 
     @State private var editingID: ShortcutItem.ID?
     @State private var deleteConfirmationItem: ShortcutItem?
+    @State private var showDupAlert = false
+    @State private var dupAlertMessage = ""
+
+    /// 编辑前备份原始值：[itemID: (key, cmd, shift, opt, ctrl)]
+    @State private var editBackup: [ShortcutItem.ID: (String, Bool, Bool, Bool, Bool)] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
             header
             content
-        .onChange(of: editingID) { _, newValue in
-            if newValue == nil {
-                // 编辑结束 → 确保 @Bindable 变更已写入存储
-                try? modelContext.save()
-                notifyShortcutsChanged()
+        }
+        .onChange(of: editingID) { old, new in
+            if new != nil {
+                // 编辑开始 → 暂停快捷键监听
+                GlobalShortcutMonitor.shared.pause()
+            } else if let id = old {
+                // 编辑结束 → 恢复监听 + 检查重复
+                GlobalShortcutMonitor.shared.resume()
+                defer {
+                    editBackup[id] = nil
+                    try? modelContext.save()
+                    notifyShortcutsChanged()
+                }
+
+                guard let item = shortcuts.first(where: { $0.id == id }),
+                      let back = editBackup[id] else { return }
+
+                // 检查快捷键是否与其他应用重复
+                let dup = shortcuts.first { other in
+                    other.id != id
+                    && other.keyEquivalent == item.keyEquivalent
+                    && other.modifierCommand == item.modifierCommand
+                    && other.modifierShift == item.modifierShift
+                    && other.modifierOption == item.modifierOption
+                    && other.modifierControl == item.modifierControl
+                }
+
+                if let dup {
+                    // 回退到编辑前的值
+                    item.keyEquivalent  = back.0
+                    item.modifierCommand = back.1
+                    item.modifierShift   = back.2
+                    item.modifierOption  = back.3
+                    item.modifierControl = back.4
+
+                    dupAlertMessage = "快捷键「\(item.displayText)」已被「\(dup.appName)」使用"
+                    showDupAlert = true
+                }
             }
         }
-
+        .alert("快捷键冲突", isPresented: $showDupAlert) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(dupAlertMessage)
         }
         .alert("确认删除", isPresented: .init(
             get: { deleteConfirmationItem != nil },
@@ -37,9 +78,7 @@ struct ShortcutsView: View {
         )) {
             Button("取消", role: .cancel) { deleteConfirmationItem = nil }
             Button("删除", role: .destructive) {
-                if let item = deleteConfirmationItem {
-                    deleteItem(item)
-                }
+                if let item = deleteConfirmationItem { deleteItem(item) }
                 deleteConfirmationItem = nil
             }
         } message: {
@@ -89,12 +128,18 @@ struct ShortcutsView: View {
                     ShortcutRow(
                         item: item,
                         isEditing: editingID == item.id,
-                        onStartEdit: { editingID = item.id },
+                        onStartEdit: {
+                            editBackup[item.id] = (item.keyEquivalent, item.modifierCommand, item.modifierShift, item.modifierOption, item.modifierControl)
+                            editingID = item.id
+                        },
                         onEndEdit: { editingID = nil },
                         onDelete: { deleteConfirmationItem = item }
                     )
                     .contextMenu {
-                        Button("配置快捷键") { editingID = item.id }
+                        Button("配置快捷键") {
+                            editBackup[item.id] = (item.keyEquivalent, item.modifierCommand, item.modifierShift, item.modifierOption, item.modifierControl)
+                            editingID = item.id
+                        }
                         Button("启动应用") { launchApp(item) }
                         Divider()
                         Button("删除", role: .destructive) { deleteConfirmationItem = item }
@@ -144,9 +189,7 @@ struct ShortcutsView: View {
     }
 
     private func deleteItems(offsets: IndexSet) {
-        for index in offsets {
-            deleteItem(shortcuts[index])
-        }
+        for index in offsets { deleteItem(shortcuts[index]) }
     }
 
     private func deleteItem(_ item: ShortcutItem) {
@@ -155,13 +198,11 @@ struct ShortcutsView: View {
         notifyShortcutsChanged()
     }
 
-    /// 启动应用
     private func launchApp(_ item: ShortcutItem) {
         let url = URL(fileURLWithPath: item.appPath)
         NSWorkspace.shared.open(url)
     }
 
-    /// 通知全局监听重载
     private func notifyShortcutsChanged() {
         NotificationCenter.default.post(name: .shortcutsDidChange, object: nil)
     }
@@ -178,19 +219,16 @@ private struct ShortcutRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // 应用图标
             Image(nsImage: NSWorkspace.shared.icon(forFile: item.appPath))
                 .resizable()
                 .frame(width: 32, height: 32)
 
-            // 应用名
             Text(item.appName)
                 .font(.body)
                 .lineLimit(1)
 
             Spacer()
 
-            // 快捷键显示 / 录制器
             if isEditing {
                 ShortcutRecorderView(
                     keyEquivalent: $item.keyEquivalent,
@@ -208,7 +246,6 @@ private struct ShortcutRow: View {
                     .foregroundStyle(.tertiary)
             }
 
-            // 编辑按钮
             Button {
                 if isEditing { onEndEdit() } else { onStartEdit() }
             } label: {
@@ -219,10 +256,7 @@ private struct ShortcutRow: View {
             .buttonStyle(.borderless)
             .help(isEditing ? "完成编辑" : "配置快捷键")
 
-            // 删除按钮（始终可见）
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
+            Button(role: .destructive) { onDelete() } label: {
                 Image(systemName: "trash")
                     .font(.title3)
                     .foregroundStyle(.secondary.opacity(0.5))
@@ -255,7 +289,7 @@ private struct ShortcutRow: View {
     }
 }
 
-// MARK: - 将 ShortcutItem 修饰符转为 EventModifiers
+// MARK: - ShortcutItem 扩展
 
 extension ShortcutItem {
     fileprivate var swiftUIModifiers: SwiftUI.EventModifiers {
