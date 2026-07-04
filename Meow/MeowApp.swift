@@ -38,25 +38,62 @@ struct MeowApp: App {
 
         // 菜单栏图标
         MenuBarExtra("Meow", systemImage: "pawprint.fill") {
-            Button("首页") {
-                showMainWindow()
-            }
-
-            Divider()
-
-            Button("退出") {
-                NSApplication.shared.terminate(nil)
-            }
+            MeowMenuView()
         }
         .modelContainer(sharedModelContainer)
     }
+}
 
-    /// 将主窗口显示到前台（从最小化/后台恢复）
+// MARK: - MenuBar 菜单视图
+
+private struct MeowMenuView: View {
+    @State private var isMonitoringEnabled = GlobalShortcutMonitor.shared.isRunning
+
+    var body: some View {
+        Button("首页") {
+            showMainWindow()
+        }
+
+        Button("快捷键管理") {
+            navigateTo(.shortcuts)
+        }
+
+        Button("宠物管理") {
+            navigateTo(.pets)
+        }
+
+        Divider()
+
+        Toggle("快捷键监听", isOn: $isMonitoringEnabled)
+            .onChange(of: isMonitoringEnabled) { _, newValue in
+                if newValue {
+                    GlobalShortcutMonitor.shared.resume()
+                } else {
+                    GlobalShortcutMonitor.shared.pause()
+                }
+            }
+
+        Divider()
+
+        Button("退出") {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
     private func showMainWindow() {
         NSApplication.shared.activate(ignoringOtherApps: true)
         if let window = NSApplication.shared.windows.first(where: { $0.isVisible || $0.isMiniaturized }) {
             window.deminiaturize(nil)
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    private func navigateTo(_ section: SidebarSection) {
+        showMainWindow()
+        NotificationCenter.default.post(
+            name: .navigateToSection,
+            object: nil,
+            userInfo: ["section": section.rawValue]
+        )
     }
 }
