@@ -44,9 +44,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
 
         // 3) 找窗口：可见/最小化 → 隐藏 → 重建
-        let win = NSApp.windows.first(where: { $0.isVisible || $0.isMiniaturized })
-            ?? NSApp.windows.first  // hidden window after hide/unhide
-            ?? createMainWindow()   // all windows closed by user
+        let hasTitledWindow = NSApp.windows.contains { $0.styleMask.contains(.titled) }
+        let win: NSWindow
+        if hasTitledWindow {
+            win = NSApp.windows.first(where: { $0.isVisible || $0.isMiniaturized })
+                ?? NSApp.windows.first!
+        } else {
+            // 用户关闭了主窗口，内部窗口都是无标题的 → 重建
+            NSLog("[AppDelegate] no titled window, creating new main window")
+            win = createMainWindow()
+        }
         win.makeKeyAndOrderFront(nil)
 
         NSApplication.shared.activate(ignoringOtherApps: true)
