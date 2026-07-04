@@ -7,60 +7,26 @@
 
 import AppKit
 import SwiftData
-import SwiftUI
 
 /// 应用委托：拦截 Dock/CMD+Q 的退出，改为隐藏到后台（menubar 模式）
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 由 menubar「退出」按钮设为 true，表示本次是真正的退出
     static var shouldTerminate = false
 
-    /// SwiftData 容器引用（由 MeowApp 启动时注入）
-    var modelContainer: ModelContainer?
- 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 注入全局 ModelContainer
-        modelContainer = _sharedModelContainer
-        // 启动全局快捷键监听
+        NSLog("[AppDelegate] didFinishLaunching")
         GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
-        // 首次启动显示主窗口
-        showMainWindow()
     }
 
-    /// 手动管理的主窗口（不依赖 WindowGroup，解决 policy 切换后窗口不重建的问题）
-    private var mainWindowController: NSWindowController?
- 
     /// 显示主窗口（创建或恢复）
     func showMainWindow() {
+        NSLog("[AppDelegate] showMainWindow, currentPolicy=%ld", NSApp.activationPolicy().rawValue)
         NSApp.setActivationPolicy(.regular)
- 
-        if let wc = mainWindowController, let window = wc.window {
+        NSApp.unhide(nil)
+        // 将所有窗口带到前台
+        for window in NSApp.windows {
             window.makeKeyAndOrderFront(nil)
-        } else {
-            createMainWindow()
         }
- 
-        NSApplication.shared.activate(ignoringOtherApps: true)
-    }
- 
-    private func createMainWindow() {
-        guard let container = modelContainer else { return }
- 
-        let contentView = ContentView()
-            .modelContainer(container)
-        let hostingCtrl = NSHostingController(rootView: contentView)
- 
-        let window = NSWindow(contentViewController: hostingCtrl)
-        window.title = "Meow"
-        window.setFrameAutosaveName("MainWindow")
-        window.tabbingMode = .disallowed
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
- 
-        let wc = NSWindowController(window: window)
-        wc.shouldCascadeWindows = false
-        wc.windowFrameAutosaveName = "MainWindow"
- 
-        mainWindowController = wc
-        window.makeKeyAndOrderFront(nil)
     }
  
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -68,8 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateNow
         }
 
-        // 隐藏窗口 + 从 Dock 移除
-        mainWindowController?.window?.orderOut(nil)
+        NSLog("[AppDelegate] Dock quit, hiding to menu bar, windows=%ld", sender.windows.count)
+        // 先隐藏窗口，再移除 Dock 图标
+        sender.hide(nil)
         NSApp.setActivationPolicy(.accessory)
 
         return .terminateCancel

@@ -10,11 +10,8 @@ import SwiftData
 
 /// 全局共享的 ModelContainer（供 AppDelegate 和 SwiftUI 场景共用）
 let _sharedModelContainer: ModelContainer = {
-    let schema = Schema([
-        ShortcutItem.self,
-    ])
+    let schema = Schema([ShortcutItem.self])
     let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
     do {
         return try ModelContainer(for: schema, configurations: [modelConfiguration])
     } catch {
@@ -26,18 +23,26 @@ let _sharedModelContainer: ModelContainer = {
 struct MeowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
  
-    let modelContainer = _sharedModelContainer
+    var sharedModelContainer: ModelContainer { _sharedModelContainer }
 
     var body: some Scene {
+        // 主窗口
+        WindowGroup {
+            ContentView()
+                .onAppear {
+                    GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
+                }
+        }
+        .commands {
+            AppMenuCommands()
+        }
+        .modelContainer(_sharedModelContainer)
+
         // 菜单栏图标
         MenuBarExtra("Meow", systemImage: "pawprint.fill") {
             MeowMenuView()
         }
-        .menuBarExtraStyle(.menu)
-        .commands {
-            AppMenuCommands()
-        }
-        .modelContainer(modelContainer)
+        .modelContainer(_sharedModelContainer)
     }
 }
 
