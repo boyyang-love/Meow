@@ -54,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[AppDelegate] no titled window, creating new main window")
             win = createMainWindow()
         }
+        // 透明标题栏（toolbar 背景色透出内容区）
+        win.titlebarAppearsTransparent = true
         win.makeKeyAndOrderFront(nil)
 
         NSApplication.shared.activate(ignoringOtherApps: true)
@@ -68,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Meow"
         window.setFrameAutosaveName("MainWindow")
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.titlebarAppearsTransparent = true
         window.center()
         return window
     }
