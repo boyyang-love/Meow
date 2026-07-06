@@ -10,7 +10,7 @@ import SwiftData
 
 /// 全局共享的 ModelContainer（供 AppDelegate 和 SwiftUI 场景共用）
 let _sharedModelContainer: ModelContainer = {
-    let schema = Schema([ShortcutItem.self])
+    let schema = Schema([ShortcutItem.self, PetItem.self])
     let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
     do {
         return try ModelContainer(for: schema, configurations: [modelConfiguration])
@@ -52,10 +52,7 @@ private struct MeowMenuView: View {
     @State private var isMonitoringEnabled = GlobalShortcutMonitor.shared.isRunning
 
     var body: some View {
-        Button("首页") {
-            showMainWindow()
-        }
-
+        
         Button("快捷键管理") {
             navigateTo(.shortcuts)
         }

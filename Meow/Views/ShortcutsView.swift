@@ -16,7 +16,6 @@ struct ShortcutsView: View {
     @Query(sort: \ShortcutItem.appName) private var shortcuts: [ShortcutItem]
 
     @State private var editingID: ShortcutItem.ID?
-    @State private var deleteConfirmationItem: ShortcutItem?
     @State private var showDupAlert = false
     @State private var dupAlertMessage = ""
 
@@ -25,13 +24,8 @@ struct ShortcutsView: View {
 
     var body: some View {
         content
-            .toolbar {
-                ToolbarItem {
-                    Button(action: pickAppAndAdd) {
-                        Label("添加应用程序快捷键", systemImage: "plus")
-                    }
-                    .help("添加快捷键")
-                }
+            .onReceive(NotificationCenter.default.publisher(for: .addShortcut)) { _ in
+                pickAppAndAdd()
             }
         .onChange(of: editingID) { old, new in
             if new != nil {
@@ -77,32 +71,18 @@ struct ShortcutsView: View {
         } message: {
             Text(dupAlertMessage)
         }
-        .alert("确认删除", isPresented: .init(
-            get: { deleteConfirmationItem != nil },
-            set: { if !$0 { deleteConfirmationItem = nil } }
-        )) {
-            Button("取消", role: .cancel) { deleteConfirmationItem = nil }
-            Button("删除", role: .destructive) {
-                if let item = deleteConfirmationItem { deleteItem(item) }
-                deleteConfirmationItem = nil
-            }
-        } message: {
-            if let item = deleteConfirmationItem {
-                Text("确定要删除「\(item.appName)」的快捷键配置吗？")
-            }
-        }
+
     }
 
     @ViewBuilder
     private var content: some View {
         if shortcuts.isEmpty {
-            Spacer()
             ContentUnavailableView(
                 "暂无快捷键",
                 systemImage: "keyboard",
                 description: Text("点击右上角 + 添加应用程序快捷键")
             )
-            Spacer()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             List {
                 ForEach(shortcuts) { item in
@@ -114,17 +94,10 @@ struct ShortcutsView: View {
                             editingID = item.id
                         },
                         onEndEdit: { editingID = nil },
-                        onDelete: { deleteConfirmationItem = item }
+                        onLaunchApp: { launchApp(item) },
+                        onDelete: { deleteItem(item) }
                     )
-                    .contextMenu {
-                        Button("配置快捷键") {
-                            editBackup[item.id] = (item.keyEquivalent, item.modifierCommand, item.modifierShift, item.modifierOption, item.modifierControl)
-                            editingID = item.id
-                        }
-                        Button("启动应用") { launchApp(item) }
-                        Divider()
-                        Button("删除", role: .destructive) { deleteConfirmationItem = item }
-                    }
+
                     .background {
                         if !item.keyEquivalent.isEmpty {
                             Button("") { launchApp(item) }
@@ -135,8 +108,15 @@ struct ShortcutsView: View {
                                 .hidden()
                         }
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            deleteItem(item)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                    }
                 }
-                .onDelete(perform: deleteItems)
+
             }
             .listStyle(.plain)
         }
@@ -196,7 +176,9 @@ private struct ShortcutRow: View {
     let isEditing: Bool
     let onStartEdit: () -> Void
     let onEndEdit: () -> Void
+    var onLaunchApp: (() -> Void)?
     let onDelete: () -> Void
+    @State private var showDeletePopover = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -237,7 +219,7 @@ private struct ShortcutRow: View {
             .buttonStyle(.borderless)
             .help(isEditing ? "完成编辑" : "配置快捷键")
 
-            Button(role: .destructive) { onDelete() } label: {
+            Button(role: .destructive) { showDeletePopover = true } label: {
                 Image(systemName: "trash")
                     .font(.title3)
                     .foregroundStyle(.secondary.opacity(0.5))
@@ -246,6 +228,35 @@ private struct ShortcutRow: View {
             .help("删除此快捷键")
             .opacity(isEditing ? 0.3 : 1)
             .disabled(isEditing)
+            .popover(isPresented: $showDeletePopover) {
+                VStack(spacing: 14) {
+                    Image(systemName: "trash")
+                        .font(.title3)
+                        .foregroundStyle(.red)
+                    Text("确认删除")
+                        .font(.headline)
+                    Text("确定要删除「\(item.appName)」的快捷键配置吗？")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider()
+                    HStack(spacing: 12) {
+                        Button("取消") {
+                            showDeletePopover = false
+                        }
+                        .keyboardShortcut(.escape)
+                        Button("删除", role: .destructive) {
+                            onDelete()
+                            showDeletePopover = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    }
+                }
+                .padding()
+                .frame(width: 230)
+            }
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
@@ -255,6 +266,18 @@ private struct ShortcutRow: View {
             NSWorkspace.shared.open(url)
         }
         .animation(.easeInOut(duration: 0.2), value: isEditing)
+        .contextMenu {
+            Button("配置快捷键") {
+                onStartEdit()
+            }
+            Button("启动应用") {
+                onLaunchApp?()
+            }
+            Divider()
+            Button("删除", role: .destructive) {
+                showDeletePopover = true
+            }
+        }
     }
 
     private func shortcutLabel(_ text: String) -> some View {

@@ -1,8 +1,8 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "extended-srgb:0.00000,0.53333,1.00000,1.00000",
-      "extended-srgb:0.00000,0.78431,0.70196,1.00000"
+      "extended-gray:1.00000,1.00000",
+      "extended-gray:1.00000,1.00000"
     ],
     "orientation" : {
       "start" : {
@@ -19,28 +19,13 @@
     {
       "layers" : [
         {
-          "blend-mode" : "plus-darker",
-          "glass" : true,
-          "hidden" : false,
-          "image-name" : "猫咪.svg",
-          "name" : "猫咪",
+          "image-name" : "熊猫脚印-倾斜.svg",
+          "name" : "熊猫脚印-倾斜",
           "position" : {
-            "scale" : 2,
+            "scale" : 4.5,
             "translation-in-points" : [
-              78.859375,
-              99.99811688876275
-            ]
-          }
-        },
-        {
-          "glass" : true,
-          "image-name" : "首页-轮播喵爪icon.svg",
-          "name" : "首页-轮播喵爪icon",
-          "position" : {
-            "scale" : 4,
-            "translation-in-points" : [
-              -14.2421875,
-              -20.80143819118348
+              5.327803443873222,
+              13.6171875
             ]
           }
         }

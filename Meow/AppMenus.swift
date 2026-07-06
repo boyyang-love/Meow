@@ -30,15 +30,6 @@ struct AppMenuCommands: Commands {
                     AppMenuAction.showShortcutList()
                 }
             }
-
-            Divider()
-
-            Section {
-                Button("切换快捷键显示") {
-                    AppMenuAction.toggleShortcutOverlay()
-                }
-                .keyboardShortcut("k", modifiers: [.command, .shift])
-            }
         }
 
         // MARK: 宠物（Pet）
@@ -107,10 +98,6 @@ enum AppMenuAction {
         postNavigation(.shortcuts)
     }
 
-    static func toggleShortcutOverlay() {
-        print("[Menu] 切换快捷键显示")
-    }
-
     static func addNewPet() {
         postNavigation(.pets)
     }
@@ -137,4 +124,5 @@ enum AppMenuAction {
 extension Notification.Name {
     static let navigateToSection = Notification.Name("com.meow.navigateToSection")
     static let shortcutsDidChange = Notification.Name("com.meow.shortcutsDidChange")
+    static let addShortcut = Notification.Name("com.meow.addShortcut")
 }

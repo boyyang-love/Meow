@@ -10,7 +10,7 @@ import SwiftData
 import SwiftUI
 
 /// 应用委托：拦截 Dock/CMD+Q 的退出，改为隐藏到后台（menubar 模式）
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// 由 menubar「退出」按钮设为 true，表示本次是真正的退出
     static var shouldTerminate = false
 
@@ -22,7 +22,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.shared = self
     }
 
+    private var isPreview: Bool {
+        ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil)
+        return false
+    }
+
+    private func registerWindowDelegate() {
+        for win in NSApp.windows where win.styleMask.contains(.titled) {
+            win.delegate = self
+        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidBecomeKey(_:)),
+            name: NSWindow.didBecomeKeyNotification,
+            object: nil
+        )
+    }
+
+    @objc func windowDidBecomeKey(_ note: Notification) {
+        guard let win = note.object as? NSWindow, win.styleMask.contains(.titled) else { return }
+        win.delegate = self
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
+        guard !isPreview else { return }
         // 在 SwiftUI 设置场景之前强制 regular 模式（新版 macOS 中
         // MenuBarExtra + WindowGroup 共存时可能默认走 accessory）
         NSApp.setActivationPolicy(.regular)
@@ -31,9 +58,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("[AppDelegate] didFinishLaunching")
+        guard !isPreview else { return }
         GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
         showMainWindow()
+        registerWindowDelegate()
         NSLog("[AppDelegate] post-didFinishLaunching windows=%ld isHidden=%d", NSApp.windows.count, NSApp.isHidden)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if flag {
+            showMainWindow()
+            return true
+        }
+        NSLog("[AppDelegate] handleReopen: no visible windows, deferring to system")
+        return false
     }
 
     /// 显示主窗口（创建或恢复）
@@ -43,15 +81,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 2) 再回复 Dock 图标
         NSApp.setActivationPolicy(.regular)
 
-        // 3) 找窗口：可见/最小化 → 隐藏 → 重建
-        let hasTitledWindow = NSApp.windows.contains { $0.styleMask.contains(.titled) }
+        let totalWindows = NSApp.windows.count
+        let titledWins = NSApp.windows.filter { $0.styleMask.contains(.titled) }
+        let visibleTitled = titledWins.filter { $0.isVisible || $0.isMiniaturized }
+        let hasTitledWindow = !titledWins.isEmpty
+
+        NSLog("[AppDelegate] showMainWindow: total=%ld titled=%ld visible=%ld",
+              totalWindows, titledWins.count, visibleTitled.count)
+
         let win: NSWindow
-        if hasTitledWindow {
-            win = NSApp.windows.first(where: { $0.isVisible || $0.isMiniaturized })
-                ?? NSApp.windows.first!
+        if let visible = visibleTitled.first {
+            win = visible
+            NSLog("[AppDelegate] showMainWindow: using visible titled win")
+        } else if let closed = titledWins.first {
+            win = closed
+            NSLog("[AppDelegate] showMainWindow: restoring closed titled win")
         } else {
-            // 用户关闭了主窗口，内部窗口都是无标题的 → 重建
-            NSLog("[AppDelegate] no titled window, creating new main window")
+            NSLog("[AppDelegate] showMainWindow: no titled window, creating new main window")
             win = createMainWindow()
         }
         // 透明标题栏（toolbar 背景色透出内容区）

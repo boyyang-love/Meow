@@ -6,6 +6,10 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		37F9E9E22FF9EF4F00C8D774 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 37F9E9E12FF9EF4F00C8D774 /* Lottie */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		37D85E9D2FF8B4D70023C3D9 /* Meow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Meow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -22,6 +26,7 @@
 		37D85E9A2FF8B4D70023C3D9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				37F9E9E22FF9EF4F00C8D774 /* Lottie in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -60,6 +65,9 @@
 				37D85E9F2FF8B4D70023C3D9 /* Meow */,
 			);
 			name = Meow;
+			packageProductDependencies = (
+				37F9E9E12FF9EF4F00C8D774 /* Lottie */,
+			);
 			productName = Meow;
 			productReference = 37D85E9D2FF8B4D70023C3D9 /* Meow.app */;
 			productType = "com.apple.product-type.application";
@@ -88,6 +96,9 @@
 			);
 			mainGroup = 37D85E942FF8B4D70023C3D9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				37F9E9E02FF9EF4F00C8D774 /* XCRemoteSwiftPackageReference "lottie-spm" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 37D85E9E2FF8B4D70023C3D9 /* Products */;
 			projectDirPath = "";
@@ -323,6 +334,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		37F9E9E02FF9EF4F00C8D774 /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.6.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		37F9E9E12FF9EF4F00C8D774 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 37F9E9E02FF9EF4F00C8D774 /* XCRemoteSwiftPackageReference "lottie-spm" */;
+			productName = Lottie;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 37D85E952FF8B4D70023C3D9 /* Project object */;
 	validationLevel = 1;
