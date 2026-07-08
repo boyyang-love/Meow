@@ -92,18 +92,26 @@ final class ActivePetManager {
         try? ctx.save()
     }
 
-    /// 调整缩放
-    func updateScale(_ scale: Double) {
-        guard let pet = currentPet, let ctx = modelContext else { return }
+   /// 调整缩放
+   func updateScale(_ scale: Double) {
+        guard let pet = currentPet else { return }
         pet.scale = scale
-        let w = defaultWidth * scale
-        let h = defaultHeight * scale
         if let origin = window?.frame.origin {
-            window?.setFrame(CGRect(origin: origin, size: CGSize(width: w, height: h)), display: true)
+            window?.setFrame(CGRect(origin: origin, size: CGSize(width: defaultWidth * scale, height: defaultHeight * scale)), display: true)
         }
-        try? ctx.save()
-        // 刷新内容视图
-        window?.contentView = NSHostingView(rootView: makeContentView(for: pet))
+        // 防抖批量保存，避免每次缩放都触发 @Query 重新取值
+        debouncedSave()
+    }
+
+    private var saveTask: Task<Void, Never>?
+
+    private func debouncedSave() {
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let ctx = modelContext else { return }
+            try? ctx.save()
+        }
     }
 
     // MARK: - Private
@@ -199,5 +207,10 @@ private struct ActivePetOverlayView: View {
             .opacity(0) // 默认隐藏，后续可改为悬停显示
         }
         .frame(width: 150 * scale, height: 150 * scale)
+        .onChange(of: pet.scale) { _, newScale in
+            if let newScale, abs(newScale - scale) > 0.001 {
+                scale = newScale
+            }
+        }
     }
 }

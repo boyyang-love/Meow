@@ -12,52 +12,60 @@ import SwiftData
 
 struct PetsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \PetItem.createdAt, order: .forward) private var pets: [PetItem]
+    @State private var pets: [PetItem] = []
+    @State private var refreshTick = 0
     @State private var selectedPet: PetItem?
     @Binding var showAddSheet: Bool
     @Binding var pendingImportUuid: String?
     @Binding var pendingImportName: String?
 
     var body: some View {
+        let currentPendingUuid = pendingImportUuid
+        let currentPendingName = pendingImportName
+
         petListView
             .frame(minWidth: 400, minHeight: 400)
+            .onChange(of: refreshTick) { _, _ in
+                fetchPets()
+            }
             .onAppear {
                 ActivePetManager.shared.setup(with: modelContext)
+                fetchPets()
                 if let activePet = pets.first(where: { $0.isActive }) {
                     ActivePetManager.shared.showPet(activePet)
                 }
             }
     .sheet(isPresented: $showAddSheet) {
-        AddPetView(preImportedFileName: pendingImportUuid, preImportedName: pendingImportName)
+        AddPetView(preImportedFileName: currentPendingUuid, preImportedName: currentPendingName)
             .onDisappear {
                 pendingImportUuid = nil
                 pendingImportName = nil
+                refreshTick += 1
             }
     }
     }
 
     // MARK: - 宠物列表
 
+    @ViewBuilder
     private var petListView: some View {
-        VStack(spacing: 0) {
-            if pets.isEmpty {
-                emptyListPlaceholder
-            } else {
-                List(pets, selection: $selectedPet) { pet in
+        if pets.isEmpty {
+            emptyListPlaceholder
+        } else {
+           ScrollView {
+                LazyVStack(spacing: 0) {
+                    // 当前活跃宠物展示区（与列表一起滚动）
+                    if let activePet = pets.first(where: { $0.isActive }) {
+                        activePetSection(for: activePet)
+                    }
+
+                ForEach(pets) { pet in
                     PetRowView(pet: pet, onToggle: togglePetActivation, onDelete: deletePet)
-                        .tag(pet as PetItem?)
-                       .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                           Button(role: .destructive) {
-                               deletePet(pet)
-                           } label: {
-                               Image(systemName: "trash")
-                           }
-                       }
+                        .padding(.horizontal, 6)
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
-                .listRowSeparator(.hidden)
+                }
             }
+            .scrollIndicators(.never)
         }
     }
 
@@ -89,8 +97,64 @@ struct PetsView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.top, 4)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - 活跃宠物展示
+
+   private func activePetSection(for pet: PetItem) -> some View {
+        let currentScale = pet.scale ?? 1.0
+        // 用整数十分位计算，避免浮点误差累积
+        let currentTenths = max(5, min(20, Int(round(currentScale * 10))))
+        let previewSize: CGFloat = 150 * (CGFloat(currentTenths) / 10.0)
+
+        return VStack(spacing: 8) {
+            // 动画预览 + 左右缩放按钮
+            HStack(spacing: 0) {
+                Button {
+                    ActivePetManager.shared.updateScale(Double(max(5, currentTenths - 1)) / 10.0)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
+                        .padding(10)
+                }
+                .buttonStyle(.plain)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .help("缩小")
+                .disabled(currentTenths <= 5)
+                .padding(.leading, 16)
+
+                Spacer()
+
+                LottieView(filename: pet.effectiveLottieFileName)
+                    .frame(width: previewSize, height: previewSize)
+                    .overlay(alignment: .bottom) {
+                        
+                    }
+
+                Spacer()
+
+                Button {
+                    ActivePetManager.shared.updateScale(Double(min(20, currentTenths + 1)) / 10.0)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.title2)
+                        .padding(10)
+                }
+                .buttonStyle(.plain)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .help("放大")
+                .disabled(currentTenths >= 20)
+                .padding(.trailing, 16)
+            }
+            .frame(height: 180)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func fetchPets() {
+        let descriptor = FetchDescriptor<PetItem>(sortBy: [SortDescriptor(\.createdAt, order: .forward)])
+        pets = (try? modelContext.fetch(descriptor)) ?? []
     }
 
     // MARK: - Actions
@@ -111,7 +175,6 @@ struct PetsView: View {
 
 
     private func deletePet(_ pet: PetItem) {
-        // 清理自定义 Lottie 文件
         if let customFile = pet.customLottieFileName {
             PetFileManager.shared.deleteCustomFile(filename: customFile)
         }
@@ -119,6 +182,7 @@ struct PetsView: View {
         if selectedPet?.id == pet.id {
             selectedPet = nil
         }
+        fetchPets()
     }
 }
 
@@ -258,12 +322,18 @@ struct PetDetailView: View {
 
 // MARK: - 添加宠物视图
 
-private struct AddPetView: View {
-    var preImportedFileName: String?
-    var preImportedName: String?
-    @State private var importedFileName: String?
+   private struct AddPetView: View {
+        var preImportedFileName: String?
+        var preImportedName: String?
+        @State private var importedFileName: String?
 
-    @Environment(\.modelContext) private var modelContext
+        init(preImportedFileName: String?, preImportedName: String?) {
+            self.preImportedFileName = preImportedFileName
+            self.preImportedName = preImportedName
+            _importedFileName = State(initialValue: preImportedFileName)
+        }
+
+        @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
@@ -319,9 +389,6 @@ private struct AddPetView: View {
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
-            if let preImportedFileName {
-                importedFileName = preImportedFileName
-            }
             if let preImportedName, name.isEmpty {
                 name = preImportedName
             }

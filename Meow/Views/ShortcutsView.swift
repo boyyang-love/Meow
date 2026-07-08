@@ -28,9 +28,13 @@ struct ShortcutsView: View {
                 pickAppAndAdd()
             }
         .onChange(of: editingID) { old, new in
-            if new != nil {
+            if let id = new {
                 // 编辑开始 → 暂停快捷键监听
                 GlobalShortcutMonitor.shared.pause()
+                // 自动进入编辑时初始化备份（如新增快捷键）
+                if editBackup[id] == nil, let item = shortcuts.first(where: { $0.id == id }) {
+                    editBackup[id] = (item.keyEquivalent, item.modifierCommand, item.modifierShift, item.modifierOption, item.modifierControl)
+                }
             } else if let id = old {
                 // 编辑结束 → 恢复监听 + 检查重复
                 GlobalShortcutMonitor.shared.resume()
@@ -61,7 +65,7 @@ struct ShortcutsView: View {
                     item.modifierOption  = back.3
                     item.modifierControl = back.4
 
-                    dupAlertMessage = "快捷键「\(item.displayText)」已被「\(dup.appName)」使用"
+                    dupAlertMessage = "快捷键「\(dup.displayText)」已被「\(dup.appName)」使用"
                     showDupAlert = true
                 }
             }
@@ -119,6 +123,7 @@ struct ShortcutsView: View {
 
             }
             .listStyle(.plain)
+            .scrollIndicators(.never)
         }
     }
 

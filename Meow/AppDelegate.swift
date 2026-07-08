@@ -127,12 +127,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return .terminateNow
         }
 
-        // 1) 先隐藏窗口
-        sender.hide(nil)
-        // 2) 再移除 Dock 图标（与 showMainWindow 对称）
+        // 1) 切换到menubar模式，移除 Dock 图标
         NSApp.setActivationPolicy(.accessory)
+        // 2) 只隐藏主窗口，浮动宠物窗口保持可见
+        for window in NSApp.windows where window.level != .floating {
+            window.orderOut(nil)
+        }
 
-        NSLog("[AppDelegate] shouldTerminate: done isHidden=%d", NSApp.isHidden)
+        NSLog("[AppDelegate] shouldTerminate: switched to accessory, pet kept visible")
         return .terminateCancel
     }
 }

@@ -10,6 +10,8 @@ import Lottie
 
 /// SwiftUI 包装器，用于在 macOS 上显示 Lottie 动画
 struct LottieView: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     typealias NSViewType = NSView
 
     let filename: String
@@ -20,12 +22,22 @@ struct LottieView: NSViewRepresentable {
         let animationView = LottieAnimationView(animation: nil)
         animationView.contentMode = .scaleAspectFit
         animationView.loopMode = loopMode
+        context.coordinator.lastFilename = filename
         reloadAnimation(animationView)
+        if !isAnimating {
+            animationView.pause()
+        }
         return animationView
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let animationView = nsView as? LottieAnimationView else { return }
+        guard context.coordinator.lastFilename != filename else {
+            animationView.contentMode = .scaleAspectFit
+            if !isAnimating { animationView.pause() }
+            return
+        }
+        context.coordinator.lastFilename = filename
         animationView.contentMode = .scaleAspectFit
         animationView.loopMode = loopMode
         reloadAnimation(animationView)
@@ -62,5 +74,13 @@ struct LottieView: NSViewRepresentable {
             return
         }
         view.play()
+    }
+}
+
+// MARK: - Coordinator
+
+extension LottieView {
+    class Coordinator {
+        var lastFilename: String?
     }
 }
