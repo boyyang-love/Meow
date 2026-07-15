@@ -6,6 +6,7 @@
 //
 
 import Cocoa
+import UserNotifications
 import SwiftData
 import ApplicationServices
 import OSLog
@@ -44,8 +45,9 @@ final class GlobalShortcutMonitor {
 
     private(set) var isRunning = false
     private var retryTimer: DispatchSourceTimer?
-    private var notificationObserver: NSObjectProtocol?
-    private var _isMonitoringEnabled = true
+ private var notificationObserver: NSObjectProtocol?
+    private(set) var superCloseShortcut: SuperCloseShortcut = .empty
+ private var _isMonitoringEnabled = true
     private let enableLock = NSLock()
 
     func pause() { enableLock.withLock { _isMonitoringEnabled = false }; log.info("⏸️ 监听暂停") }
@@ -56,21 +58,33 @@ final class GlobalShortcutMonitor {
 
     // MARK: - 启动
 
-    func start(with container: ModelContainer) {
-        self.container = container
-        reloadShortcuts()
-        log.info("✅ start() 被调用，短加载数量：\(self.shortcuts.count)")
+   func start(with container: ModelContainer) {
+       self.container = container
+       reloadShortcuts()
+        reloadSuperCloseShortcut()
+        log.info("✅ start() 被调用，快捷键数量：\(self.shortcuts.count)")
 
-        requestAccessibilityPermission()
-        tryCreateEventTap()
-
-        // 监听快捷键变更通知，block 方式避免 @objc 问题
-        notificationObserver = NotificationCenter.default.addObserver(
-            forName: .shortcutsDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.reloadShortcuts()
+        // 请求通知权限
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error { self.log.warning("通知权限请求失败：\(error.localizedDescription)") }
         }
-    }
+
+
+       requestAccessibilityPermission()
+       tryCreateEventTap()
+
+        // 监听快捷键变更通知
+        NotificationCenter.default.addObserver(
+           forName: .shortcutsDidChange, object: nil, queue: .main
+       ) { [weak self] _ in
+           self?.reloadShortcuts()
+       }
+        NotificationCenter.default.addObserver(
+            forName: .superCloseShortcutDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.reloadSuperCloseShortcut()
+        }
+   }
 
     // MARK: - CGEventTap
 
@@ -121,13 +135,30 @@ final class GlobalShortcutMonitor {
 
     // MARK: - 事件匹配
 
-    private func handleCGEvent(_ cgEvent: CGEvent) -> Bool {
-        guard enableLock.withLock({ _isMonitoringEnabled }) else { return false }
+   private func handleCGEvent(_ cgEvent: CGEvent) -> Bool {
+       guard enableLock.withLock({ _isMonitoringEnabled }) else { return false }
 
-        guard let nsEvent = NSEvent(cgEvent: cgEvent) else { return false }
-        guard let chars = nsEvent.charactersIgnoringModifiers?.lowercased() else { return false }
-        let flags = nsEvent.modifierFlags
-        let snapshot: [(ShortcutItem)] = shortcutsLock.withLock { Array(_shortcuts) }
+       guard let nsEvent = NSEvent(cgEvent: cgEvent) else { return false }
+       guard let chars = nsEvent.charactersIgnoringModifiers?.lowercased() else { return false }
+       let flags = nsEvent.modifierFlags
+
+
+       // 检查超级关闭快捷键
+       let closeShortcut = superCloseShortcut
+
+       if closeShortcut.isEnabled && !closeShortcut.keyEquivalent.isEmpty
+           && closeShortcut.keyEquivalent.lowercased() == chars
+            && flags.contains(.command) == closeShortcut.modifierCommand
+            && flags.contains(.shift)   == closeShortcut.modifierShift
+            && flags.contains(.option)  == closeShortcut.modifierOption
+            && flags.contains(.control) == closeShortcut.modifierControl
+        {
+            self.log.info("⚡️ 超级关闭命中")
+            DispatchQueue.main.async { [weak self] in self?.superCloseAllApps() }
+            return true
+        }
+
+       let snapshot: [(ShortcutItem)] = shortcutsLock.withLock { Array(_shortcuts) }
 
         for item in snapshot where !item.keyEquivalent.isEmpty && item.keyEquivalent.lowercased() == chars {
             let matched = flags.contains(.command) == item.modifierCommand
@@ -217,4 +248,90 @@ final class GlobalShortcutMonitor {
         url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity?Privacy_Accessibility")
         if let url { NSWorkspace.shared.open(url) }
     }
+    // MARK: - 超级关闭
+
+    func reloadSuperCloseShortcut() {
+        superCloseShortcut = SuperCloseShortcut.load()
+        log.info("📋 超级关闭快捷键：\\(self.superCloseShortcut.displayText, privacy: .public)")
+    }
+
+    func superCloseAllApps() {
+        let meowBundle = Bundle.main.bundleIdentifier ?? "com.meow.MeowApp"
+        let excludedIDs: Set<String> = [
+            meowBundle,
+            "com.apple.finder",
+            "com.apple.loginwindow",
+            "com.apple.dock",
+            "com.apple.systempreferences",
+            "com.apple.systemuiserver",
+            "com.apple.controlcenter",
+            "com.apple.notificationcenterui",
+        ]
+
+        let apps = NSWorkspace.shared.runningApplications
+        var closedCount = 0
+        var failedApps: [String] = []
+        var sigkillUsed = false
+
+        for app in apps {
+            guard !app.isTerminated else { continue }
+            guard app.activationPolicy == .regular else { continue }
+            guard let bundleID = app.bundleIdentifier, !excludedIDs.contains(bundleID) else { continue }
+            let name = app.localizedName ?? bundleID
+            log.info("🔄 正在关闭: \(name, privacy: .public) (\(bundleID, privacy: .public))")
+            
+            // 1) 先尝试 NSRunningApplication.terminate()（优雅退出）
+            if app.terminate() {
+                closedCount += 1
+                log.info("✅ terminate() 成功: \(name, privacy: .public)")
+                continue
+            }
+            
+            // 2) 失败 → POSIX kill(SIGTERM)
+            let pid = app.processIdentifier
+            guard pid > 0 else { failedApps.append(name); continue }
+            let sigtermResult = kill(pid, SIGTERM)
+            if sigtermResult == 0 {
+                closedCount += 1
+                log.info("✅ kill(SIGTERM) 成功: \(name, privacy: .public)")
+                continue
+            }
+            
+            // 3) SIGTERM 失败 → POSIX kill(SIGKILL)
+            sigkillUsed = true
+            let sigkillResult = kill(pid, SIGKILL)
+            if sigkillResult == 0 {
+                closedCount += 1
+                log.info("⚠️ kill(SIGKILL) 强制关闭: \(name, privacy: .public)")
+            } else {
+                failedApps.append(name)
+                log.info("❌ 所有方式最终失败: \(name, privacy: .public) errno=\(errno)")
+            }
+        }
+
+        if failedApps.isEmpty {
+            let mode = sigkillUsed ? "（含强制关闭）" : ""
+            log.info("🛑 超级关闭完成，关闭了 \(closedCount) 个应用\(mode)")
+        } else {
+            log.info("🛑 超级关闭完成，关闭了 \(closedCount) 个应用，\(failedApps.count) 个关闭失败：\(failedApps.joined(separator: ", "), privacy: .public)")
+        }
+
+        if closedCount > 0 {
+            let content = UNMutableNotificationContent()
+            content.title = "超级关闭"
+            if failedApps.isEmpty {
+                let mode = sigkillUsed ? "（含强制关闭）" : ""
+                content.body = "已关闭 \(closedCount) 个应用\(mode)"
+            } else {
+                content.body = "已关闭 \(closedCount) 个，\(failedApps.count) 个失败"
+            }
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+
 }

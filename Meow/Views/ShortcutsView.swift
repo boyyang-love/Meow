@@ -14,70 +14,70 @@ import SwiftData
 struct ShortcutsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ShortcutItem.appName) private var shortcuts: [ShortcutItem]
-
+    
     @State private var editingID: ShortcutItem.ID?
     @State private var showDupAlert = false
     @State private var dupAlertMessage = ""
-
+    
     /// 编辑前备份原始值：[itemID: (key, cmd, shift, opt, ctrl)]
     @State private var editBackup: [ShortcutItem.ID: (String, Bool, Bool, Bool, Bool)] = [:]
-
+    
     var body: some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .addShortcut)) { _ in
                 pickAppAndAdd()
             }
-        .onChange(of: editingID) { old, new in
-            if let id = new {
-                // 编辑开始 → 暂停快捷键监听
-                GlobalShortcutMonitor.shared.pause()
-                // 自动进入编辑时初始化备份（如新增快捷键）
-                if editBackup[id] == nil, let item = shortcuts.first(where: { $0.id == id }) {
-                    editBackup[id] = (item.keyEquivalent, item.modifierCommand, item.modifierShift, item.modifierOption, item.modifierControl)
-                }
-            } else if let id = old {
-                // 编辑结束 → 恢复监听 + 检查重复
-                GlobalShortcutMonitor.shared.resume()
-                defer {
-                    editBackup[id] = nil
-                    try? modelContext.save()
-                    notifyShortcutsChanged()
-                }
-
-                guard let item = shortcuts.first(where: { $0.id == id }),
-                      let back = editBackup[id] else { return }
-
-                // 检查快捷键是否与其他应用重复
-                let dup = shortcuts.first { other in
-                    other.id != id
-                    && other.keyEquivalent == item.keyEquivalent
-                    && other.modifierCommand == item.modifierCommand
-                    && other.modifierShift == item.modifierShift
-                    && other.modifierOption == item.modifierOption
-                    && other.modifierControl == item.modifierControl
-                }
-
-                if let dup {
-                    // 回退到编辑前的值
-                    item.keyEquivalent  = back.0
-                    item.modifierCommand = back.1
-                    item.modifierShift   = back.2
-                    item.modifierOption  = back.3
-                    item.modifierControl = back.4
-
-                    dupAlertMessage = "快捷键「\(dup.displayText)」已被「\(dup.appName)」使用"
-                    showDupAlert = true
+            .onChange(of: editingID) { old, new in
+                if let id = new {
+                    // 编辑开始 → 暂停快捷键监听
+                    GlobalShortcutMonitor.shared.pause()
+                    // 自动进入编辑时初始化备份（如新增快捷键）
+                    if editBackup[id] == nil, let item = shortcuts.first(where: { $0.id == id }) {
+                        editBackup[id] = (item.keyEquivalent, item.modifierCommand, item.modifierShift, item.modifierOption, item.modifierControl)
+                    }
+                } else if let id = old {
+                    // 编辑结束 → 恢复监听 + 检查重复
+                    GlobalShortcutMonitor.shared.resume()
+                    defer {
+                        editBackup[id] = nil
+                        try? modelContext.save()
+                        notifyShortcutsChanged()
+                    }
+                    
+                    guard let item = shortcuts.first(where: { $0.id == id }),
+                          let back = editBackup[id] else { return }
+                    
+                    // 检查快捷键是否与其他应用重复
+                    let dup = shortcuts.first { other in
+                        other.id != id
+                        && other.keyEquivalent == item.keyEquivalent
+                        && other.modifierCommand == item.modifierCommand
+                        && other.modifierShift == item.modifierShift
+                        && other.modifierOption == item.modifierOption
+                        && other.modifierControl == item.modifierControl
+                    }
+                    
+                    if let dup {
+                        // 回退到编辑前的值
+                        item.keyEquivalent  = back.0
+                        item.modifierCommand = back.1
+                        item.modifierShift   = back.2
+                        item.modifierOption  = back.3
+                        item.modifierControl = back.4
+                        
+                        dupAlertMessage = "快捷键「\(dup.displayText)」已被「\(dup.appName)」使用"
+                        showDupAlert = true
+                    }
                 }
             }
-        }
-        .alert("快捷键冲突", isPresented: $showDupAlert) {
-            Button("确定", role: .cancel) { }
-        } message: {
-            Text(dupAlertMessage)
-        }
-
+            .alert("快捷键冲突", isPresented: $showDupAlert) {
+                Button("确定", role: .cancel) { }
+            } message: {
+                Text(dupAlertMessage)
+            }
+        
     }
-
+    
     @ViewBuilder
     private var content: some View {
         if shortcuts.isEmpty {
@@ -101,7 +101,7 @@ struct ShortcutsView: View {
                         onLaunchApp: { launchApp(item) },
                         onDelete: { deleteItem(item) }
                     )
-
+                    
                     .background {
                         if !item.keyEquivalent.isEmpty {
                             Button("") { launchApp(item) }
@@ -120,15 +120,15 @@ struct ShortcutsView: View {
                         }
                     }
                 }
-
+                
             }
             .listStyle(.plain)
             .scrollIndicators(.never)
         }
     }
-
+    
     // MARK: - 选择应用
-
+    
     private func pickAppAndAdd() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.application]
@@ -136,13 +136,13 @@ struct ShortcutsView: View {
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.message = "选择要添加快捷键的应用程序"
         panel.prompt = "添加"
-
+        
         guard panel.runModal() == .OK, let url = panel.url else { return }
-
+        
         let appName = url.deletingPathExtension().lastPathComponent
         let bundle = Bundle(url: url)
         let bundleId = bundle?.bundleIdentifier ?? ""
-
+        
         let item = ShortcutItem(
             appName: appName,
             appPath: url.path,
@@ -153,22 +153,22 @@ struct ShortcutsView: View {
         notifyShortcutsChanged()
         editingID = item.id  // 添加后自动进入编辑
     }
-
+    
     private func deleteItems(offsets: IndexSet) {
         for index in offsets { deleteItem(shortcuts[index]) }
     }
-
+    
     private func deleteItem(_ item: ShortcutItem) {
         if editingID == item.id { editingID = nil }
         modelContext.delete(item)
         notifyShortcutsChanged()
     }
-
+    
     private func launchApp(_ item: ShortcutItem) {
         let url = URL(fileURLWithPath: item.appPath)
         NSWorkspace.shared.open(url)
     }
-
+    
     private func notifyShortcutsChanged() {
         NotificationCenter.default.post(name: .shortcutsDidChange, object: nil)
     }
@@ -184,19 +184,19 @@ private struct ShortcutRow: View {
     var onLaunchApp: (() -> Void)?
     let onDelete: () -> Void
     @State private var showDeletePopover = false
-
+    
     var body: some View {
         HStack(spacing: 12) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: item.appPath))
                 .resizable()
                 .frame(width: 32, height: 32)
-
+            
             Text(item.appName)
                 .font(.body)
                 .lineLimit(1)
-
+            
             Spacer()
-
+            
             if isEditing {
                 ShortcutRecorderView(
                     keyEquivalent: $item.keyEquivalent,
@@ -213,7 +213,7 @@ private struct ShortcutRow: View {
                     .font(.callout)
                     .foregroundStyle(.tertiary)
             }
-
+            
             Button {
                 if isEditing { onEndEdit() } else { onStartEdit() }
             } label: {
@@ -223,7 +223,7 @@ private struct ShortcutRow: View {
             }
             .buttonStyle(.borderless)
             .help(isEditing ? "完成编辑" : "配置快捷键")
-
+            
             Button(role: .destructive) { showDeletePopover = true } label: {
                 Image(systemName: "trash")
                     .font(.title3)
@@ -284,7 +284,7 @@ private struct ShortcutRow: View {
             }
         }
     }
-
+    
     private func shortcutLabel(_ text: String) -> some View {
         Text(text)
             .font(.system(.body, design: .monospaced))

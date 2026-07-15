@@ -18,13 +18,12 @@ struct PetsView: View {
     @Binding var showAddSheet: Bool
     @Binding var pendingImportUuid: String?
     @Binding var pendingImportName: String?
-
+    
     var body: some View {
         let currentPendingUuid = pendingImportUuid
         let currentPendingName = pendingImportName
-
+        
         petListView
-            .frame(minWidth: 400, minHeight: 400)
             .onChange(of: refreshTick) { _, _ in
                 fetchPets()
             }
@@ -35,40 +34,41 @@ struct PetsView: View {
                     ActivePetManager.shared.showPet(activePet)
                 }
             }
-    .sheet(isPresented: $showAddSheet) {
-        AddPetView(preImportedFileName: currentPendingUuid, preImportedName: currentPendingName)
-            .onDisappear {
-                pendingImportUuid = nil
-                pendingImportName = nil
-                refreshTick += 1
+            .sheet(isPresented: $showAddSheet) {
+                AddPetView(preImportedFileName: currentPendingUuid, preImportedName: currentPendingName)
+                    .onDisappear {
+                        pendingImportUuid = nil
+                        pendingImportName = nil
+                        refreshTick += 1
+                    }
             }
     }
-    }
-
+    
     // MARK: - 宠物列表
-
+    
     @ViewBuilder
     private var petListView: some View {
         if pets.isEmpty {
             emptyListPlaceholder
         } else {
-           ScrollView {
+            ScrollView {
                 LazyVStack(spacing: 0) {
                     // 当前活跃宠物展示区（与列表一起滚动）
                     if let activePet = pets.first(where: { $0.isActive }) {
                         activePetSection(for: activePet)
                     }
-
-                ForEach(pets) { pet in
-                    PetRowView(pet: pet, onToggle: togglePetActivation, onDelete: deletePet)
-                        .padding(.horizontal, 6)
-                }
+                    
+                    ForEach(pets) { pet in
+                        PetRowView(pet: pet, onToggle: togglePetActivation, onDelete: deletePet)
+                            .padding(.horizontal, 6)
+                    }
                 }
             }
+            .padding(.bottom, 10)
             .scrollIndicators(.never)
         }
     }
-
+    
     private var emptyListPlaceholder: some View {
         VStack(spacing: 20) {
             ZStack {
@@ -79,7 +79,7 @@ struct PetsView: View {
                     .font(.system(size: 36))
                     .foregroundStyle(.tertiary)
             }
-
+            
             VStack(spacing: 6) {
                 Text("还没有宠物")
                     .font(.title3)
@@ -89,7 +89,7 @@ struct PetsView: View {
                     .font(.callout)
                     .foregroundStyle(.tertiary)
             }
-
+            
             Button(action: { showAddSheet = true }) {
                 Label("添加第一只宠物", systemImage: "plus")
             }
@@ -97,18 +97,18 @@ struct PetsView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
+    
     // MARK: - 活跃宠物展示
-
-   private func activePetSection(for pet: PetItem) -> some View {
+    
+    private func activePetSection(for pet: PetItem) -> some View {
         let currentScale = pet.scale ?? 1.0
         // 用整数十分位计算，避免浮点误差累积
         let currentTenths = max(5, min(20, Int(round(currentScale * 10))))
         let previewSize: CGFloat = 150 * (CGFloat(currentTenths) / 10.0)
-
+        
         return VStack(spacing: 8) {
             // 动画预览 + 左右缩放按钮
             HStack(spacing: 0) {
@@ -124,17 +124,17 @@ struct PetsView: View {
                 .help("缩小")
                 .disabled(currentTenths <= 5)
                 .padding(.leading, 16)
-
+                
                 Spacer()
-
+                
                 LottieView(filename: pet.effectiveLottieFileName)
                     .frame(width: previewSize, height: previewSize)
                     .overlay(alignment: .bottom) {
                         
                     }
-
+                
                 Spacer()
-
+                
                 Button {
                     ActivePetManager.shared.updateScale(Double(min(20, currentTenths + 1)) / 10.0)
                 } label: {
@@ -151,14 +151,14 @@ struct PetsView: View {
             .frame(height: 180)
         }
     }
-
+    
     private func fetchPets() {
         let descriptor = FetchDescriptor<PetItem>(sortBy: [SortDescriptor(\.createdAt, order: .forward)])
         pets = (try? modelContext.fetch(descriptor)) ?? []
     }
-
+    
     // MARK: - Actions
-
+    
     private func togglePetActivation(_ pet: PetItem) {
         if pet.isActive {
             pet.isActive = false
@@ -172,8 +172,8 @@ struct PetsView: View {
         }
         try? modelContext.save()
     }
-
-
+    
+    
     private func deletePet(_ pet: PetItem) {
         if let customFile = pet.customLottieFileName {
             PetFileManager.shared.deleteCustomFile(filename: customFile)
@@ -192,9 +192,9 @@ struct PetDetailView: View {
     @Bindable var pet: PetItem
     @Environment(\.modelContext) private var modelContext
     @State private var showDeleteConfirm = false
-
+    
     private var isCustom: Bool { pet.customLottieFileName != nil }
-
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
@@ -207,7 +207,7 @@ struct PetDetailView: View {
                                 .fill(.quinary)
                                 .frame(width: 200, height: 200)
                         )
-
+                    
                     // 自定义动画管理
                     HStack(spacing: 10) {
                         Button {
@@ -217,7 +217,7 @@ struct PetDetailView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-
+                        
                         if isCustom {
                             Button(role: .destructive) {
                                 resetToDefault()
@@ -228,14 +228,14 @@ struct PetDetailView: View {
                             .controlSize(.small)
                         }
                     }
-
+                    
                     if isCustom {
                         Label("当前使用自定义动画", systemImage: "square.and.pencil")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
                 }
-
+                
                 // 信息编辑区（分组卡片）
                 VStack(spacing: 12) {
                     HStack {
@@ -245,7 +245,7 @@ struct PetDetailView: View {
                         TextField("宠物名字", text: $pet.name)
                             .textFieldStyle(.roundedBorder)
                     }
-
+                    
                     HStack {
                         Text("种类")
                             .foregroundStyle(.secondary)
@@ -254,9 +254,9 @@ struct PetDetailView: View {
                             .foregroundStyle(.primary)
                         Spacer()
                     }
-
+                    
                     Divider()
-
+                    
                     Toggle(isOn: $pet.isActive) {
                         Label("在桌面显示", systemImage: "macbook")
                             .foregroundStyle(.primary)
@@ -270,7 +270,7 @@ struct PetDetailView: View {
                         .shadow(color: .black.opacity(0.04), radius: 4, y: 1)
                 )
                 .padding(.horizontal)
-
+                
                 Button(role: .destructive) {
                     showDeleteConfirm = true
                 } label: {
@@ -294,16 +294,16 @@ struct PetDetailView: View {
         }
         .frame(minWidth: 320)
     }
-
+    
     private func performDelete() {
         if let customFile = pet.customLottieFileName {
             PetFileManager.shared.deleteCustomFile(filename: customFile)
         }
         modelContext.delete(pet)
     }
-
+    
     // MARK: - 自定义文件操作
-
+    
     private func importCustomLottie() {
         guard let result = PetFileManager.shared.importLottieFile() else { return }
         if let oldFile = pet.customLottieFileName {
@@ -311,7 +311,7 @@ struct PetDetailView: View {
         }
         pet.customLottieFileName = result.uuid
     }
-
+    
     private func resetToDefault() {
         if let customFile = pet.customLottieFileName {
             PetFileManager.shared.deleteCustomFile(filename: customFile)
@@ -322,22 +322,22 @@ struct PetDetailView: View {
 
 // MARK: - 添加宠物视图
 
-   private struct AddPetView: View {
-        var preImportedFileName: String?
-        var preImportedName: String?
-        @State private var importedFileName: String?
-
-        init(preImportedFileName: String?, preImportedName: String?) {
-            self.preImportedFileName = preImportedFileName
-            self.preImportedName = preImportedName
-            _importedFileName = State(initialValue: preImportedFileName)
-        }
-
-        @Environment(\.modelContext) private var modelContext
+private struct AddPetView: View {
+    var preImportedFileName: String?
+    var preImportedName: String?
+    @State private var importedFileName: String?
+    
+    init(preImportedFileName: String?, preImportedName: String?) {
+        self.preImportedFileName = preImportedFileName
+        self.preImportedName = preImportedName
+        _importedFileName = State(initialValue: preImportedFileName)
+    }
+    
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-
+    
     @State private var name = ""
-
+    
     var body: some View {
         VStack(spacing: 0) {
             // --- 标题区 ---
@@ -351,21 +351,21 @@ struct PetDetailView: View {
             }
             .padding(.top, 24)
             .padding(.bottom, 20)
-
+            
             ScrollView {
                 VStack(spacing: 24) {
                     // --- 宠物预览区 ---
                     previewSection
-
-
+                    
+                    
                     // --- 名字输入 ---
                     nameSection
                 }
                 .padding(.horizontal, 24)
             }
-
+            
             Divider()
-
+            
             // --- 操作按钮 ---
             HStack(spacing: 12) {
                 Button(role: .cancel) {
@@ -375,7 +375,7 @@ struct PetDetailView: View {
                         .frame(minWidth: 60)
                 }
                 .keyboardShortcut(.escape)
-
+                
                 Button(action: addPet) {
                     Label("添加", systemImage: "plus")
                         .frame(minWidth: 60)
@@ -394,20 +394,20 @@ struct PetDetailView: View {
             }
         }
     }
-
+    
     // MARK: - Preview Section
-
+    
     private var previewSection: some View {
         VStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(.quinary)
                     .frame(width: 160, height: 160)
-
+                
                 LottieView(filename: effectiveFileName)
                     .frame(width: 140, height: 140)
             }
-
+            
             Button {
                 if let result = PetFileManager.shared.importLottieFile() {
                     importedFileName = result.uuid
@@ -424,7 +424,7 @@ struct PetDetailView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .help("从文件中选择一个 Lottie JSON 动画")
-
+            
             if importedFileName != nil {
                 Button(role: .destructive) {
                     importedFileName = nil
@@ -443,16 +443,16 @@ struct PetDetailView: View {
                 .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
         )
     }
-
+    
     // MARK: - Name Section
-
+    
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("宠物名字")
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
-
+            
             TextField("给你的宠物取个名字", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .font(.body)
@@ -466,17 +466,17 @@ struct PetDetailView: View {
                 .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
         )
     }
-
+    
     // MARK: - Helpers
-
+    
     private var effectiveFileName: String {
         importedFileName ?? PetType.cat.lottieFileName
     }
-
+    
     private func addPet() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-
+        
         let pet = PetItem(
             name: trimmed,
             petType: .cat,
@@ -497,9 +497,9 @@ private struct PetRowView: View {
     var onToggle: ((PetItem) -> Void)?
     var onDelete: ((PetItem) -> Void)?
     @State private var showDeletePopover = false
-
+    
     private var isCustom: Bool { pet.customLottieFileName != nil }
-
+    
     var body: some View {
         HStack(spacing: 14) {
             // 小尺寸动画预览（圆角容器）
@@ -507,11 +507,11 @@ private struct PetRowView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(.quinary)
                     .frame(width: 52, height: 52)
-
+                
                 LottieView(filename: pet.effectiveLottieFileName)
                     .frame(width: 48, height: 48)
             }
-
+            
             // 名字 + 元数据
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -519,7 +519,7 @@ private struct PetRowView: View {
                         .font(.body)
                         .fontWeight(.semibold)
                         .lineLimit(1)
-
+                    
                     if isCustom {
                         Image(systemName: "pencil.tip")
                             .font(.system(size: 10))
@@ -527,20 +527,20 @@ private struct PetRowView: View {
                             .help("自定义动画")
                     }
                 }
-
+                
                 HStack(spacing: 6) {
                     Text(pet.createdAt, style: .date)
                         .font(.caption2)
                 }
                 .foregroundStyle(.tertiary)
             }
-
+            
             Spacer()
-
+            
             // 状态标签 + 操作按钮
             HStack(spacing: 6) {
                 statusBadge
-
+                
                 if pet.isActive {
                     Button {
                         onToggle?(pet)
@@ -552,7 +552,7 @@ private struct PetRowView: View {
                     .buttonStyle(.plain)
                     .help("收起宠物")
                 }
-
+                
                 Button {
                     onToggle?(pet)
                 } label: {
@@ -562,7 +562,7 @@ private struct PetRowView: View {
                 }
                 .buttonStyle(.plain)
                 .help(pet.isActive ? "点击停用" : "点击启用")
-
+                
                 Button(role: .destructive) {
                     showDeletePopover = true
                 } label: {
@@ -619,7 +619,7 @@ private struct PetRowView: View {
             }
         }
     }
-
+    
     @ViewBuilder
     private var statusBadge: some View {
         if pet.isActive {

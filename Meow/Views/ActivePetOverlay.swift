@@ -13,14 +13,14 @@ import SwiftData
 @MainActor
 final class ActivePetManager {
     static let shared = ActivePetManager()
-
+    
     private(set) var window: NSWindow?
     private var modelContext: ModelContext?
     private var currentPet: PetItem?
-
+    
     private let defaultWidth: CGFloat = 150
     private let defaultHeight: CGFloat = 150
-
+    
     /// 计算默认右下角位置
     private var defaultOrigin: CGPoint {
         guard let screen = NSScreen.main?.visibleFrame else { return .zero }
@@ -29,20 +29,20 @@ final class ActivePetManager {
             y: screen.minY + 20
         )
     }
-
+    
     func setup(with context: ModelContext) {
         self.modelContext = context
     }
-
+    
     /// 显示指定宠物的浮动窗口
     func showPet(_ pet: PetItem) {
         currentPet = pet
         ensureWindow()
-
+        
         let scale = pet.scale ?? 1.0
         let w = defaultWidth * scale
         let h = defaultHeight * scale
-
+        
         let savedX = pet.positionX
         let savedY = pet.positionY
         let origin: CGPoint
@@ -55,29 +55,29 @@ final class ActivePetManager {
             pet.positionY = origin.y
             try? modelContext?.save()
         }
-
+        
         window?.setFrame(CGRect(origin: origin, size: CGSize(width: w, height: h)), display: true)
         window?.contentView = NSHostingView(rootView: makeContentView(for: pet))
         window?.orderFront(nil)
     }
-
+    
     /// 将宠物浮窗置于前台（重新打开应用时调用）
     func bringWindowToFront() {
         guard let win = window, currentPet != nil else { return }
         win.orderFront(nil)
     }
-
+    
     /// 隐藏浮动窗口
     func hidePet() {
         window?.orderOut(nil)
         currentPet = nil
     }
-
+    
     /// 更新窗口位置（拖拽时调用）
     func updatePosition(_ origin: CGPoint) {
         window?.setFrameOrigin(origin)
     }
-
+    
     /// 保存位置到模型（拖拽结束时调用）
     func savePosition(_ origin: CGPoint) {
         guard let pet = currentPet, let ctx = modelContext else { return }
@@ -91,9 +91,9 @@ final class ActivePetManager {
         window?.setFrame(CGRect(origin: origin, size: CGSize(width: w, height: h)), display: true)
         try? ctx.save()
     }
-
-   /// 调整缩放
-   func updateScale(_ scale: Double) {
+    
+    /// 调整缩放
+    func updateScale(_ scale: Double) {
         guard let pet = currentPet else { return }
         pet.scale = scale
         if let origin = window?.frame.origin {
@@ -102,9 +102,9 @@ final class ActivePetManager {
         // 防抖批量保存，避免每次缩放都触发 @Query 重新取值
         debouncedSave()
     }
-
+    
     private var saveTask: Task<Void, Never>?
-
+    
     private func debouncedSave() {
         saveTask?.cancel()
         saveTask = Task { @MainActor in
@@ -113,9 +113,9 @@ final class ActivePetManager {
             try? ctx.save()
         }
     }
-
+    
     // MARK: - Private
-
+    
     private func ensureWindow() {
         if window == nil {
             let win = NSWindow(
@@ -134,7 +134,7 @@ final class ActivePetManager {
             window = win
         }
     }
-
+    
     private func makeContentView(for pet: PetItem) -> some View {
         ActivePetOverlayView(pet: pet, manager: self)
     }
@@ -145,15 +145,15 @@ final class ActivePetManager {
 private struct ActivePetOverlayView: View {
     let pet: PetItem
     let manager: ActivePetManager
-
+    
     @State private var scale: Double
-
+    
     init(pet: PetItem, manager: ActivePetManager) {
         self.pet = pet
         self.manager = manager
         _scale = State(initialValue: pet.scale ?? 1.0)
     }
-
+    
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // 动画视图
@@ -179,7 +179,7 @@ private struct ActivePetOverlayView: View {
                             manager.savePosition(newOrigin)
                         }
                 )
-
+            
             // 悬停时显示控制按钮
             VStack(spacing: 4) {
                 Button {
@@ -191,7 +191,7 @@ private struct ActivePetOverlayView: View {
                 }
                 .buttonStyle(.plain)
                 .help("缩小")
-
+                
                 Button {
                     scale = min(3.0, scale + 0.1)
                     manager.updateScale(scale)

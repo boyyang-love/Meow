@@ -12,6 +12,7 @@ import SwiftData
 
 enum SidebarSection: String, CaseIterable, Identifiable {
     case shortcuts = "快捷键"
+    case superClose = "超级关闭"
     case pets = "宠物"
     
     var id: String { rawValue }
@@ -19,6 +20,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .shortcuts: return "keyboard"
+        case .superClose: return "xmark.circle"
         case .pets:     return "pawprint"
         }
     }
@@ -42,30 +44,36 @@ struct ContentView: View {
                 }
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 150, ideal: 170)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220)
         } detail: {
             detailView(for: selectedSection)
         }
+        .frame(minWidth: 720, minHeight: 550)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                VStack(spacing: 0) {
-                    Button(action: {
-                        switch selectedSection {
-                        case .shortcuts: NotificationCenter.default.post(name: .addShortcut, object: nil)
-                        case .pets: showToolbarPopover.toggle()
-                        case nil: break
+                if selectedSection == .shortcuts || selectedSection == .pets {
+                    VStack(spacing: 0) {
+                        Button(action: {
+                            switch selectedSection {
+                            case .shortcuts: NotificationCenter.default.post(name: .addShortcut, object: nil)
+                            case .pets: showToolbarPopover.toggle()
+                            case nil: break
+                            default: break
+                            }
+                        }) {
+                            Image(systemName: "plus")
                         }
-                    }) {
-                        Image(systemName: "plus")
+                        .popover(isPresented: $showToolbarPopover, arrowEdge: .bottom) {
+                            toolbarPopoverContent
+                        }
                     }
-                    .popover(isPresented: $showToolbarPopover, arrowEdge: .bottom) {
-                        toolbarPopoverContent
-                    }
+                } else {
+                    // 占位 item：保持 toolbar 栏始终可见，防止标题栏高度变化
+                    Color.clear
+                        .frame(width: 1, height: 1)
                 }
             }
         }
-        .frame(minWidth: 600, minHeight: 400)
-        .toolbarBackground(.hidden, for: .windowToolbar)
         .onReceive(NotificationCenter.default.publisher(for: .navigateToSection)) { notification in
             if let rawValue = notification.userInfo?["section"] as? String,
                let section = SidebarSection(rawValue: rawValue) {
@@ -74,11 +82,8 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - Sidebar Row
-    
     private func sidebarRow(for section: SidebarSection) -> some View {
         let isSelected = selectedSection == section
-        
         return Label(section.rawValue, systemImage: section.icon)
             .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
             .labelStyle(.titleAndIcon)
@@ -86,6 +91,7 @@ struct ContentView: View {
             .padding(.leading, 4)
     }
     
+    // MARK: - Sidebar Row
     // MARK: - Detail View
     
     @ViewBuilder
@@ -151,6 +157,9 @@ struct ContentView: View {
             .padding(12)
             .frame(width: 200)
             
+        case .superClose:
+            EmptyView()
+            
         case nil:
             EmptyView()
         }
@@ -158,23 +167,23 @@ struct ContentView: View {
     
     @ViewBuilder
     private func detailView(for section: SidebarSection?) -> some View {
-        ZStack {
-            ShortcutsView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(section == .shortcuts ? 1 : 0)
-                .allowsHitTesting(section == .shortcuts)
-            
-            PetsView(showAddSheet: $showAddPetSheet, pendingImportUuid: $pendingImportUuid, pendingImportName: $pendingImportName)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(section == .pets ? 1 : 0)
-                .allowsHitTesting(section == .pets)
-            
-            if section == nil {
+        Group {
+            switch section {
+            case .shortcuts:
+                ShortcutsView()
+                
+            case .superClose:
+                SuperCloseView()
+                
+            case .pets:
+                PetsView(showAddSheet: $showAddPetSheet, pendingImportUuid: $pendingImportUuid, pendingImportName: $pendingImportName)
+                
+            case nil:
                 emptySelectionView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
             }
         }
-        .navigationTitle(section?.rawValue ?? "")
+        //        .navigationTitle(section?.rawValue ?? "")
     }
     
     private var emptySelectionView: some View {

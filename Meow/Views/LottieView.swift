@@ -11,13 +11,13 @@ import Lottie
 /// SwiftUI 包装器，用于在 macOS 上显示 Lottie 动画
 struct LottieView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
-
+    
     typealias NSViewType = NSView
-
+    
     let filename: String
     var isAnimating: Bool = true
     var loopMode: LottieLoopMode = .loop
-
+    
     func makeNSView(context: Context) -> NSView {
         let animationView = LottieAnimationView(animation: nil)
         animationView.contentMode = .scaleAspectFit
@@ -29,7 +29,7 @@ struct LottieView: NSViewRepresentable {
         }
         return animationView
     }
-
+    
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let animationView = nsView as? LottieAnimationView else { return }
         guard context.coordinator.lastFilename != filename else {
@@ -45,11 +45,11 @@ struct LottieView: NSViewRepresentable {
             animationView.pause()
         }
     }
-
+    
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
         proposal.replacingUnspecifiedDimensions()
     }
-
+    
     private func reloadAnimation(_ view: LottieAnimationView) {
         view.contentMode = .scaleAspectFit
         // 1) 优先尝试 Documents/Pets/ (用户上传的自定义文件)

@@ -11,7 +11,7 @@ import SwiftData
 /// 全局共享的 ModelContainer（供 AppDelegate 和 SwiftUI 场景共用）
 let _sharedModelContainer: ModelContainer = {
     let schema = Schema([ShortcutItem.self, PetItem.self])
-    let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    let modelConfiguration = ModelConfiguration("MeowData", schema: schema, isStoredInMemoryOnly: false, allowsSave: true, groupContainer: .none, cloudKitDatabase: .none)
     do {
         return try ModelContainer(for: schema, configurations: [modelConfiguration])
     } catch {
@@ -22,9 +22,9 @@ let _sharedModelContainer: ModelContainer = {
 @main
 struct MeowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
- 
+    
     var sharedModelContainer: ModelContainer { _sharedModelContainer }
-
+    
     var body: some Scene {
         // 主窗口
         WindowGroup {
@@ -33,11 +33,12 @@ struct MeowApp: App {
                     GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
                 }
         }
+        .windowResizability(.contentMinSize)
         .commands {
             AppMenuCommands()
         }
         .modelContainer(_sharedModelContainer)
-
+        
         // 菜单栏图标
         MenuBarExtra("Meow", systemImage: "pawprint.fill") {
             MeowMenuView()
@@ -50,19 +51,22 @@ struct MeowApp: App {
 
 private struct MeowMenuView: View {
     @State private var isMonitoringEnabled = GlobalShortcutMonitor.shared.isRunning
-
+    
     var body: some View {
         
         Button("快捷键管理") {
             navigateTo(.shortcuts)
         }
-
+        
+        Button("超级关闭设置") {
+            navigateTo(.superClose)
+        }
+        
         Button("宠物管理") {
+            
             navigateTo(.pets)
         }
-
-        Divider()
-
+        
         Toggle("快捷键监听", isOn: $isMonitoringEnabled)
             .onChange(of: isMonitoringEnabled) { _, newValue in
                 if newValue {
@@ -71,19 +75,25 @@ private struct MeowMenuView: View {
                     GlobalShortcutMonitor.shared.pause()
                 }
             }
-
+        
         Divider()
-
+        
+        Button("隐藏到菜单栏") {
+            AppDelegate.shared?.hideToMenuBar()
+        }
+        
+        Divider()
+        
         Button("退出") {
             AppDelegate.shouldTerminate = true
             NSApplication.shared.terminate(nil)
         }
     }
-
+    
     private func showMainWindow() {
         AppDelegate.shared?.showMainWindow()
     }
-
+    
     private func navigateTo(_ section: SidebarSection) {
         showMainWindow()
         NotificationCenter.default.post(

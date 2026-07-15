@@ -18,20 +18,47 @@ struct AppMenuCommands: Commands {
                 checkShortcutStatus()
             }
         }
-
+        
         // MARK: 快捷键（Shortcuts）
         CommandMenu("快捷键") {
             Section {
                 Button("快捷键设置...") {
                     AppMenuAction.showShortcutSettings()
                 }
-
+                
                 Button("查看所有快捷键") {
                     AppMenuAction.showShortcutList()
                 }
             }
         }
-
+        // MARK: 窗口
+        CommandMenu("窗口") {
+            Section {
+                Button("隐藏到菜单栏") {
+                    AppDelegate.shared?.hideToMenuBar()
+                }
+                .keyboardShortcut("h", modifiers: [.command, .option])
+            }
+        }
+        
+        // MARK: 超级关闭
+        CommandMenu("超级关闭") {
+            Section {
+                Button("超级关闭设置...") {
+                    AppMenuAction.showSuperClose()
+                }
+            }
+            
+            Divider()
+            
+            Section {
+                Button("一键关闭所有应用") {
+                    GlobalShortcutMonitor.shared.superCloseAllApps()
+                }
+                .keyboardShortcut("x", modifiers: [.command, .option, .shift])
+            }
+        }
+        
         // MARK: 宠物（Pet）
         CommandMenu("宠物") {
             Section {
@@ -39,15 +66,15 @@ struct AppMenuCommands: Commands {
                     AppMenuAction.addNewPet()
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
-
+                
                 Button("宠物列表") {
                     AppMenuAction.showPetList()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
             }
-
+            
             Divider()
-
+            
             Section {
                 Button("宠物设置...") {
                     AppMenuAction.showPetSettings()
@@ -56,7 +83,7 @@ struct AppMenuCommands: Commands {
             }
         }
     }
-
+    
     /// 诊断：检查全局监听状态
     private func checkShortcutStatus() {
         let trusted = AXIsProcessTrusted()
@@ -68,7 +95,7 @@ struct AppMenuCommands: Commands {
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "确定")
-
+        
         if !trusted {
             alert.addButton(withTitle: "打开权限设置")
             let resp = alert.runModal()
@@ -79,7 +106,7 @@ struct AppMenuCommands: Commands {
             alert.runModal()
         }
     }
-
+    
     /// 打开辅助功能设置
     private func openAccessibilitySettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
@@ -93,23 +120,27 @@ enum AppMenuAction {
     static func showShortcutSettings() {
         postNavigation(.shortcuts)
     }
-
+    
     static func showShortcutList() {
         postNavigation(.shortcuts)
     }
-
+    
     static func addNewPet() {
         postNavigation(.pets)
     }
-
+    
     static func showPetList() {
         postNavigation(.pets)
     }
-
+    
     static func showPetSettings() {
         postNavigation(.pets)
     }
-
+    
+    static func showSuperClose() {
+        postNavigation(.superClose)
+    }
+    
     private static func postNavigation(_ section: SidebarSection) {
         NotificationCenter.default.post(
             name: .navigateToSection,
@@ -125,4 +156,5 @@ extension Notification.Name {
     static let navigateToSection = Notification.Name("com.meow.navigateToSection")
     static let shortcutsDidChange = Notification.Name("com.meow.shortcutsDidChange")
     static let addShortcut = Notification.Name("com.meow.addShortcut")
+    static let superCloseShortcutDidChange = Notification.Name("com.meow.superCloseShortcutDidChange")
 }
