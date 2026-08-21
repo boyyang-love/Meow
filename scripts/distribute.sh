@@ -52,6 +52,18 @@ check_environment() {
     echo ""
     info "=========== 环境检查 ==========="
 
+    # 自动检测 Xcode：xcode-select 指向 CommandLineTools 时终端里 xcodebuild 不可用，
+    # 探测已安装的 Xcode 并设置 DEVELOPER_DIR
+    if ! xcodebuild -version &>/dev/null; then
+        for dir in /Applications/Xcode.app /Applications/Xcode-beta.app; do
+            if [[ -x "$dir/Contents/Developer/usr/bin/xcodebuild" ]]; then
+                export DEVELOPER_DIR="$dir/Contents/Developer"
+                info "检测到 Xcode，自动设置 DEVELOPER_DIR=$DEVELOPER_DIR"
+                break
+            fi
+        done
+    fi
+
     # Xcode
     if ! xcodebuild -version &>/dev/null; then
         fatal "xcodebuild 不可用，请安装 Xcode 并运行 xcode-select --install"
@@ -79,34 +91,32 @@ check_environment() {
     else
         ok "Developer ID 证书已就绪"
         echo "$IDENTITIES" | while IFS= read -r line; do
-            echo "       ${line##* }"
+            echo "       $(echo "$line" | sed 's/^[^"]*"//; s/"$//')"
         done
     fi
 
     # 项目签名配置检查
     echo ""
     info "项目签名配置 (pbxproj 中的 target buildSettings):"
-    rg "(CODE_SIGN_STYLE|DEVELOPMENT_TEAM|ENABLE_APP_SANDBOX|ENABLE_HARDENED_RUNTIME) " "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" || true | while IFS= read -r line; do
-        echo "      $line"
-    done
+    grep -E "(CODE_SIGN_STYLE|DEVELOPMENT_TEAM|ENABLE_APP_SANDBOX|ENABLE_HARDENED_RUNTIME) " "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" || true
 
     # 自动签名模式检查
-    if rg -q "CODE_SIGN_STYLE = Automatic" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null; then
+    if grep -qE "CODE_SIGN_STYLE = Automatic" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null; then
         ok "签名模式: Automatic (Xcode 自动管理证书)"
     fi
 
     # 沙箱检查
-    if rg -q "ENABLE_APP_SANDBOX = NO" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null; then
+    if grep -qE "ENABLE_APP_SANDBOX = NO" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null; then
         ok "App Sandbox 已关闭 (必要 — 应用需要全局快捷键和辅助功能权限)"
     fi
 
     # Hardened Runtime
-    if rg -q "ENABLE_HARDENED_RUNTIME = YES" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null; then
+    if grep -qE "ENABLE_HARDENED_RUNTIME = YES" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null; then
         ok "Hardened Runtime 已启用 (公证要求)"
     fi
 
     # 部署目标
-    DEPLOY_TARGET=$(rg "MACOSX_DEPLOYMENT_TARGET" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null | head -1 | sed 's/.*= *//;s/;.*//')
+    DEPLOY_TARGET=$(grep -E "MACOSX_DEPLOYMENT_TARGET" "$PROJECT_DIR/Meow.xcodeproj/project.pbxproj" 2>/dev/null | head -1 | sed 's/.*= *//;s/;.*//')
     info "部署目标: macOS $DEPLOY_TARGET"
 
     # notarytool 检查
@@ -134,16 +144,20 @@ archive() {
     rm -rf "$ARCHIVE_PATH"
 
     info "正在编译 Release 版本..."
-    xcodebuild archive \
-        -project "$PROJECT" \
-        -scheme "$SCHEME" \
-        -configuration "$CONFIGURATION" \
-        -archivePath "$ARCHIVE_PATH" \
-        | xcbeautify || xcodebuild archive \
+    if command -v xcbeautify &>/dev/null; then
+        xcodebuild archive \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -archivePath "$ARCHIVE_PATH" \
+            | xcbeautify
+    else
+        xcodebuild archive \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
             -configuration "$CONFIGURATION" \
             -archivePath "$ARCHIVE_PATH"
+    fi
 
     if [[ ! -d "$ARCHIVE_PATH" ]]; then
         fatal "归档失败"
