@@ -26,9 +26,10 @@ PROJECT="Meow.xcodeproj"
 CONFIGURATION="Release"
 
 BUNDLE_ID="com.boyyang.Meow"
-ARCHIVE_PATH="$HOME/Desktop/Meow.xcarchive"
-EXPORT_DIR="$HOME/Desktop/Meow-Export"
-DMG_PATH="$HOME/Desktop/Meow.dmg"
+# 产物输出到项目内 dist/（避开 ~/Desktop 的 TCC 文件夹访问权限限制）
+ARCHIVE_PATH="$PROJECT_DIR/dist/Meow.xcarchive"
+EXPORT_DIR="$PROJECT_DIR/dist/Meow-Export"
+DMG_PATH="$PROJECT_DIR/dist/Meow.dmg"
 APP_NAME="Meow.app"
 
 # --------------- 颜色输出 ---------------
@@ -327,7 +328,7 @@ print_guide() {
     echo ""
     echo "==================== Meow 分发指南 ===================="
     echo ""
-    echo " 1. 加入 Apple Developer Program ($99/年)"
+    echo " 1. 加入 Apple Developer Program (\$99/年)"
     echo "    https://developer.apple.com/programs/"
     echo ""
     echo " 2. 申请 Developer ID Application 证书"
