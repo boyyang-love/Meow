@@ -53,6 +53,11 @@ final class GlobalShortcutMonitor {
     func pause() { enableLock.withLock { _isMonitoringEnabled = false }; log.info("⏸️ 监听暂停") }
     func resume() { enableLock.withLock { _isMonitoringEnabled = true }; log.info("▶️ 监听恢复") }
 
+    /// 用户是否启用了快捷键监听（由 pause/resume 控制，与底层 tap 是否创建成功无关）
+    var isMonitoringEnabled: Bool {
+        enableLock.withLock { _isMonitoringEnabled }
+    }
+
 
     private init() {}
 

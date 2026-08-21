@@ -59,6 +59,15 @@ struct AppMenuCommands: Commands {
             }
         }
         
+        // MARK: 端口诊断
+        CommandMenu("端口") {
+            Section {
+                Button("端口诊断...") {
+                    AppMenuAction.showPorts()
+                }
+            }
+        }
+        
         // MARK: 宠物（Pet）
         CommandMenu("宠物") {
             Section {
@@ -139,6 +148,10 @@ enum AppMenuAction {
     
     static func showSuperClose() {
         postNavigation(.superClose)
+    }
+    
+    static func showPorts() {
+        postNavigation(.ports)
     }
     
     private static func postNavigation(_ section: SidebarSection) {

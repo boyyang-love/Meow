@@ -50,8 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func applicationWillFinishLaunching(_ notification: Notification) {
         guard !isPreview else { return }
-        // 在 SwiftUI 设置场景之前强制 regular 模式（新版 macOS 中
-        // MenuBarExtra + WindowGroup 共存时可能默认走 accessory）
+        // 在 SwiftUI 设置场景之前强制 regular 模式（保证 Dock 图标 + 主窗口显示）
         NSApp.setActivationPolicy(.regular)
         NSLog("[AppDelegate] willFinishLaunching, forced regular")
     }
@@ -60,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSLog("[AppDelegate] didFinishLaunching")
         guard !isPreview else { return }
         GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
+        _ = MenuBarController.shared   // 菜单栏图标 + 弹出面板（箭头指向图标，面板居中对齐）
         showMainWindow()
         registerWindowDelegate()
         NSLog("[AppDelegate] post-didFinishLaunching windows=%ld isHidden=%d", NSApp.windows.count, NSApp.isHidden)

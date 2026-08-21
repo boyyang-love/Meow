@@ -13,6 +13,7 @@ import SwiftData
 enum SidebarSection: String, CaseIterable, Identifiable {
     case shortcuts = "快捷键"
     case superClose = "超级关闭"
+    case ports = "端口诊断"
     case pets = "宠物"
     
     var id: String { rawValue }
@@ -21,7 +22,8 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         switch self {
         case .shortcuts: return "keyboard"
         case .superClose: return "xmark.circle"
-        case .pets:     return "pawprint"
+        case .ports:      return "network"
+        case .pets:       return "pawprint"
         }
     }
 }
@@ -160,6 +162,9 @@ struct ContentView: View {
         case .superClose:
             EmptyView()
             
+        case .ports:
+            EmptyView()
+            
         case nil:
             EmptyView()
         }
@@ -174,6 +179,9 @@ struct ContentView: View {
                 
             case .superClose:
                 SuperCloseView()
+
+            case .ports:
+                PortsView()
                 
             case .pets:
                 PetsView(showAddSheet: $showAddPetSheet, pendingImportUuid: $pendingImportUuid, pendingImportName: $pendingImportName)
