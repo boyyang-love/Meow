@@ -2,7 +2,7 @@
 
 macOS 菜单栏效率工具 —— 全局快捷键、超级关闭、端口诊断、桌面宠物,一站式收纳在菜单栏里。
 
-[![Release](https://img.shields.io/badge/Release-v1.1-blue)](https://github.com/boyyang-love/Meow/releases)
+[![Release](https://img.shields.io/badge/Release-v1.2-blue)](https://github.com/boyyang-love/Meow/releases)
 ![Platform](https://img.shields.io/badge/Platform-macOS%2027-lightgrey)
 ![Swift](https://img.shields.io/badge/Swift-6-orange)
 

@@ -20,6 +20,15 @@ struct MenuBarPanelView: View {
         case pets = "宠物"
 
         var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .shortcuts: return "keyboard"
+            case .ports: return "network"
+            case .superClose: return "xmark.circle"
+            case .pets: return "pawprint"
+            }
+        }
     }
 
     // MARK: - State
@@ -45,15 +54,14 @@ struct MenuBarPanelView: View {
 
             Divider()
 
-            Picker("", selection: $selectedTab) {
+            HStack(spacing: 4) {
                 ForEach(PanelTab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    tabButton(for: tab)
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .animation(.easeInOut(duration: 0.15), value: selectedTab)
 
             Divider()
 
@@ -72,6 +80,34 @@ struct MenuBarPanelView: View {
             guard selectedTab == .ports, !isLoadingPorts else { return }
             Task { await refreshPorts() }
         }
+    }
+
+    // MARK: - Tab Bar
+
+    @ViewBuilder
+    private func tabButton(for tab: PanelTab) -> some View {
+        let isSelected = selectedTab == tab
+        Button {
+            selectedTab = tab
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(tab.rawValue)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(isSelected ? Color.white : Color.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Header

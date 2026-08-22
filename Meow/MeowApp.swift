@@ -29,9 +29,6 @@ struct MeowApp: App {
         // 主窗口
         WindowGroup {
             ContentView()
-                .onAppear {
-                    GlobalShortcutMonitor.shared.start(with: _sharedModelContainer)
-                }
         }
         .windowResizability(.contentMinSize)
         .commands {

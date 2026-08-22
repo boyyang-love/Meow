@@ -43,6 +43,7 @@ final class GlobalShortcutMonitor {
         set { shortcutsLock.withLock { _shortcuts = newValue } }
     }
 
+    private var hasStarted = false
     private(set) var isRunning = false
     private var retryTimer: DispatchSourceTimer?
  private var notificationObserver: NSObjectProtocol?
@@ -64,6 +65,8 @@ final class GlobalShortcutMonitor {
     // MARK: - 启动
 
    func start(with container: ModelContainer) {
+       guard !hasStarted else { return }
+       hasStarted = true
        self.container = container
        reloadShortcuts()
         reloadSuperCloseShortcut()
@@ -229,8 +232,16 @@ final class GlobalShortcutMonitor {
         let trusted = AXIsProcessTrusted()
         log.info("🔐 辅助功能权限：\(trusted ? "已授权 ✅" : "未授权 ❌")")
         if trusted { return }
+
+        // 只在「首次启动且未授权」时弹一次系统授权框，之后静默引导，避免每次启动都打断用户
+        let promptedKey = "com.meow.hasPromptedAccessibility"
+        guard !UserDefaults.standard.bool(forKey: promptedKey) else { return }
+        UserDefaults.standard.set(true, forKey: promptedKey)
+
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString
         AXIsProcessTrustedWithOptions([key: true] as NSDictionary as CFDictionary)
+
+        // 3 秒后仍未授权 → 弹一次引导框，指向系统设置
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self else { return }
             if !AXIsProcessTrusted() { self.showPermissionGuide() }
