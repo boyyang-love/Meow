@@ -131,9 +131,17 @@ final class MenuBarController: NSObject, NSWindowDelegate {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.closePanel() }
         }
-        // 本地监听：点击本 App 其它窗口时也关闭；点在面板自身上则忽略
+        // 本地监听：点击本 App 其它窗口时也关闭；点在面板自身或其子窗口（Popover）上则忽略
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            if let panel = self?.panel, !panel.isVisible || event.window !== panel {
+            if let panel = self?.panel, !panel.isVisible {
+                self?.closePanel()
+            } else if let panel = self?.panel, let eventWindow = event.window {
+                // 沿 parent 链查找，点击 Popover（子窗口）时不关闭面板
+                var win: NSWindow? = eventWindow
+                while let w = win {
+                    if w === panel { return event }
+                    win = w.parent
+                }
                 self?.closePanel()
             }
             return event

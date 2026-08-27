@@ -7,7 +7,7 @@
 
 import Combine
 import SwiftUI
-
+ 
 struct PortsView: View {
 
     // MARK: - State
@@ -22,8 +22,7 @@ struct PortsView: View {
     @State private var collapsedGroupIDs: Set<String> = []
     @State private var hoveredEntryID: String?
 
-    @State private var pendingKill: PortEntry?
-    @State private var showKillConfirm = false
+    @State private var showToast = false
     @State private var errorMessage: String?
     @State private var showError = false
 
@@ -72,13 +71,23 @@ struct PortsView: View {
             guard autoRefresh, !isLoading else { return }
             Task { await refresh() }
         }
-        .alert("结束进程", isPresented: $showKillConfirm, presenting: pendingKill) { entry in
-            Button("结束进程", role: .destructive) {
-                Task { await performKill(entry) }
+        .overlay(alignment: .top) {
+            if showToast {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.system(size: 14))
+                    Text("进程已结束")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showToast)
             }
-            Button("取消", role: .cancel) {}
-        } message: { entry in
-            Text("确定要结束「\(entry.processName)」(PID \(String(entry.pid))) 吗？\n该进程正在监听端口 \(String(entry.port))（\(entry.proto)），结束后相关服务将停止。")
         }
         .alert("操作失败", isPresented: $showError) {
             Button("确定", role: .cancel) {}
@@ -103,8 +112,22 @@ struct PortsView: View {
                         onToggleCollapse: { toggleCollapse(group.id) },
                         onEntryHover: { id in hoveredEntryID = id },
                         onKill: { entry in
-                            pendingKill = entry
-                            showKillConfirm = true
+                            Task {
+                                await performKill(entry)
+                                withAnimation { showToast = true }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    withAnimation { showToast = false }
+                                }
+                            }
+                        },
+                        onKillAll: {
+                            Task {
+                                await performKillGroup(group)
+                                withAnimation { showToast = true }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    withAnimation { showToast = false }
+                                }
+                            }
                         }
                     )
                 }
@@ -262,6 +285,23 @@ struct PortsView: View {
         // 无论成功与否都刷新一次
         await refresh()
     }
+
+    private func performKillGroup(_ group: PortGroup) async {
+        var lastError: Error?
+        for pid in group.pids {
+            do {
+                try PortService.killProcess(pid: pid)
+            } catch {
+                lastError = error
+            }
+        }
+        if let lastError {
+            errorMessage = lastError.localizedDescription
+            showError = true
+        }
+        await refresh()
+    }
+
 }
 
 // MARK: - 分组卡片
@@ -274,6 +314,9 @@ private struct PortGroupCard: View {
     let onToggleCollapse: () -> Void
     let onEntryHover: (String?) -> Void
     let onKill: (PortEntry) -> Void
+    let onKillAll: () -> Void
+
+    @State private var showKillAllConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -344,6 +387,55 @@ private struct PortGroupCard: View {
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.primary.opacity(0.06)))
 
+                // 全部结束（仅多端口时显示）
+                if group.ports.count > 1 {
+                    Button {
+                        showKillAllConfirm = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showKillAllConfirm, arrowEdge: .bottom) {
+                        VStack(spacing: 10) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text("结束所有进程？")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            VStack(spacing: 4) {
+                                Text(group.appName)
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("\(group.ports.count) 个端口 · PID \(group.pids.map(String.init).joined(separator: ", "))")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                            HStack(spacing: 10) {
+                                Button("取消") {
+                                    showKillAllConfirm = false
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .keyboardShortcut(.cancelAction)
+
+                                Button("全部结束") {
+                                    showKillAllConfirm = false
+                                    onKillAll()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.red)
+                                .controlSize(.small)
+                                .keyboardShortcut(.defaultAction)
+                            }
+                        }
+                        .padding(14)
+                        .frame(width: 240)
+                    }
+                    .transition(.opacity)
+                }
+
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.tertiary)
@@ -367,6 +459,8 @@ private struct PortRow: View {
     let searchText: String
     let onHover: (String?) -> Void
     let onKill: () -> Void
+
+    @State private var showKillConfirm = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -404,14 +498,47 @@ private struct PortRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            // 结束进程（悬停变红）
-            Button(role: .destructive, action: onKill) {
+            // 结束进程（悬停变红，点击弹出 Popover 确认）
+            Button {
+                showKillConfirm = true
+            } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 13))
                     .foregroundStyle(isHovered ? Color.red : Color.secondary.opacity(0.7))
             }
             .buttonStyle(.plain)
-            .help("结束进程")
+            .popover(isPresented: $showKillConfirm, arrowEdge: .bottom) {
+                VStack(spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("结束进程？")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    Text("\(entry.processName)（PID \(entry.pid)）")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Button("取消") {
+                            showKillConfirm = false
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .keyboardShortcut(.cancelAction)
+                        
+                        Button("确认结束") {
+                            showKillConfirm = false
+                            onKill()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .controlSize(.small)
+                        .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(14)
+                .frame(width: 220)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)

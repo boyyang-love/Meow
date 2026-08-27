@@ -42,6 +42,8 @@ struct MenuBarPanelView: View {
     @State private var superClose = SuperCloseShortcut.load()
     @State private var groups: [PortGroup] = []
     @State private var isLoadingPorts = false
+    @State private var killConfirmEntry: PortEntry?
+    @State private var killAllConfirmGroup: PortGroup?
 
     /// 端口自动刷新定时器（每 5 秒）
     private let refreshTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
@@ -263,6 +265,57 @@ struct MenuBarPanelView: View {
                                 .padding(.vertical, 1)
                                 .background(Capsule().fill(Color.primary.opacity(0.06)))
                             Spacer()
+
+                            // 全部结束（仅多端口时显示）
+                            if group.ports.count > 1 {
+                                Button {
+                                    killAllConfirmGroup = group
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary.opacity(0.6))
+                                }
+                                .buttonStyle(.plain)
+                                .popover(isPresented: Binding(
+                                    get: { killAllConfirmGroup?.id == group.id },
+                                    set: { if !$0 { killAllConfirmGroup = nil } }
+                                ), arrowEdge: .bottom) {
+                                    VStack(spacing: 10) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundStyle(.orange)
+                                            Text("结束所有进程？")
+                                                .font(.system(size: 13, weight: .semibold))
+                                        }
+                                        VStack(spacing: 4) {
+                                            Text(group.appName)
+                                                .font(.system(size: 12, weight: .medium))
+                                            Text("\(group.ports.count) 个端口 · PID \(group.pids.map(String.init).joined(separator: ", "))")
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        HStack(spacing: 10) {
+                                            Button("取消") {
+                                                killAllConfirmGroup = nil
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
+                                            .keyboardShortcut(.cancelAction)
+
+                                            Button("全部结束") {
+                                                killAllConfirmGroup = nil
+                                                Task { await performKillGroup(group) }
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .tint(.red)
+                                            .controlSize(.small)
+                                            .keyboardShortcut(.defaultAction)
+                                        }
+                                    }
+                                    .padding(14)
+                                    .frame(width: 240)
+                                }
+                            }
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -290,15 +343,49 @@ struct MenuBarPanelView: View {
                                     .truncationMode(.middle)
                                     .minimumScaleFactor(0.75)
                                 Spacer(minLength: 4)
-                                Button(role: .destructive) {
-                                    confirmKill(entry)
+                                Button {
+                                    killConfirmEntry = entry
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 11))
                                         .foregroundStyle(.secondary.opacity(0.7))
                                 }
                                 .buttonStyle(.plain)
-                                .help("结束进程")
+                                .popover(isPresented: Binding(
+                                    get: { killConfirmEntry?.id == entry.id },
+                                    set: { if !$0 { killConfirmEntry = nil } }
+                                ), arrowEdge: .bottom) {
+                                    VStack(spacing: 10) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundStyle(.orange)
+                                            Text("结束进程？")
+                                                .font(.system(size: 13, weight: .semibold))
+                                        }
+                                        Text("\(entry.processName)（PID \(entry.pid)）")
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                        HStack(spacing: 10) {
+                                            Button("取消") {
+                                                killConfirmEntry = nil
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
+                                            .keyboardShortcut(.cancelAction)
+
+                                            Button("确认结束") {
+                                                killConfirmEntry = nil
+                                                Task { await performKill(entry) }
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .tint(.red)
+                                            .controlSize(.small)
+                                            .keyboardShortcut(.defaultAction)
+                                        }
+                                    }
+                                    .padding(14)
+                                    .frame(width: 220)
+                                }
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -501,19 +588,6 @@ struct MenuBarPanelView: View {
 
     // MARK: - 动作
 
-    /// 结束进程确认（用 NSAlert：SwiftUI .alert 在 MenuBarExtra 面板中不显示）
-    private func confirmKill(_ entry: PortEntry) {
-        let alert = NSAlert()
-        alert.messageText = "结束进程"
-        alert.informativeText = "确定要结束「\(entry.processName)」(PID \(String(entry.pid))) 吗？\n该进程正在监听端口 \(String(entry.port))（\(entry.proto)）。"
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "结束进程")
-        alert.addButton(withTitle: "取消")
-        if alert.runModal() == .alertFirstButtonReturn {
-            Task { await performKill(entry) }
-        }
-    }
-
     /// 显示错误提示（NSAlert）
     private func showErrorAlert(_ message: String) {
         let alert = NSAlert()
@@ -582,6 +656,21 @@ struct MenuBarPanelView: View {
             showErrorAlert(error.localizedDescription)
         }
         // 无论成功与否都刷新一次
+        await refreshPorts()
+    }
+
+    private func performKillGroup(_ group: PortGroup) async {
+        var lastError: Error?
+        for pid in group.pids {
+            do {
+                try PortService.killProcess(pid: pid)
+            } catch {
+                lastError = error
+            }
+        }
+        if let lastError {
+            showErrorAlert(lastError.localizedDescription)
+        }
         await refreshPorts()
     }
 }
