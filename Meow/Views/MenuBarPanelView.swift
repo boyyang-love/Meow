@@ -44,6 +44,8 @@ struct MenuBarPanelView: View {
     @State private var isLoadingPorts = false
     @State private var killConfirmEntry: PortEntry?
     @State private var killAllConfirmGroup: PortGroup?
+    @State private var axTrusted = PermissionGate.isAccessibilityTrusted
+    @State private var appControlStatus: AppControlPermissionStatus?
 
     /// 端口自动刷新定时器（每 5 秒）
     private let refreshTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
@@ -77,6 +79,7 @@ struct MenuBarPanelView: View {
         .frame(width: 340, height: 440)
         .task(id: selectedTab) {
             if selectedTab == .ports { await refreshPorts() }
+            if selectedTab == .superClose { refreshPermissions() }
         }
         .onReceive(refreshTimer) { _ in
             guard selectedTab == .ports, !isLoadingPorts else { return }
@@ -455,6 +458,27 @@ struct MenuBarPanelView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
+
+                    Divider()
+                        .padding(.leading, 12)
+
+                    // 权限状态：缺失时可在此再次授权
+                    HStack(spacing: 8) {
+                        Image(systemName: "hand.raised")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tint)
+                            .frame(width: 20)
+                        Text("权限")
+                            .font(.system(size: 12))
+                        Spacer()
+                        Text(permissionSummary.text)
+                            .font(.system(size: 10))
+                            .foregroundStyle(permissionSummary.ok ? Color.green : Color.orange)
+                        Button("去授权") { fixPermissions() }
+                            .controlSize(.mini)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
                 }
 
                 Divider()
@@ -487,6 +511,38 @@ struct MenuBarPanelView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: superClose.isEnabled)
             .padding(10)
+        }
+    }
+
+    // MARK: - 超级关闭权限
+
+    private var permissionSummary: (text: String, ok: Bool) {
+        var missing: [String] = []
+        if !axTrusted { missing.append("辅助功能") }
+        if let s = appControlStatus, s != .granted { missing.append("控制权限") }
+        if !missing.isEmpty { return ("缺" + missing.joined(separator: "、"), false) }
+        return appControlStatus == nil ? ("检测中…", true) : ("齐全", true)
+    }
+
+    private func refreshPermissions() {
+        axTrusted = PermissionGate.isAccessibilityTrusted
+        Task {
+            appControlStatus = await PermissionGate.probeAppControl()
+        }
+    }
+
+    /// 一键补授权：辅助功能缺失 → 打开设置；控制权限未询问 → 弹系统授权框；已拒绝 → 打开设置
+    private func fixPermissions() {
+        if !axTrusted {
+            PermissionGate.openAccessibilitySettings()
+            return
+        }
+        Task {
+            if appControlStatus == .notDetermined {
+                appControlStatus = await PermissionGate.requestAppControl()
+            } else {
+                PermissionGate.openAppControlSettings()
+            }
         }
     }
 
