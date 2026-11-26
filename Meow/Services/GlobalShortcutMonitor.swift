@@ -46,6 +46,7 @@ final class GlobalShortcutMonitor {
     private var hasStarted = false
     private(set) var isRunning = false
     private var retryTimer: DispatchSourceTimer?
+    private var hasShownPermissionGuide = false
  private var notificationObserver: NSObjectProtocol?
     private(set) var superCloseShortcut: SuperCloseShortcut = .empty
  private var _isMonitoringEnabled = true
@@ -107,6 +108,7 @@ final class GlobalShortcutMonitor {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             log.error("❌ CGEvent.tapCreate 失败，3 秒后重试")
+            if !AXIsProcessTrusted() { schedulePermissionGuide() }
             scheduleRetry()
             return
         }
@@ -130,6 +132,21 @@ final class GlobalShortcutMonitor {
         }
         t.resume()
         retryTimer = t
+    }
+
+    /// tap 创建失败且缺少辅助功能权限时（如系统更新后权限被收回），
+    /// 延迟确认后弹一次引导框，避免静默失效；每轮监听最多弹一次
+    private func schedulePermissionGuide() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self else { return }
+            if self.eventTap == nil, !AXIsProcessTrusted() { self.showPermissionGuideIfNeeded() }
+        }
+    }
+
+    private func showPermissionGuideIfNeeded() {
+        guard !hasShownPermissionGuide else { return }
+        hasShownPermissionGuide = true
+        showPermissionGuide()
     }
 
     // MARK: - 重载
@@ -241,10 +258,10 @@ final class GlobalShortcutMonitor {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString
         AXIsProcessTrustedWithOptions([key: true] as NSDictionary as CFDictionary)
 
-        // 3 秒后仍未授权 → 弹一次引导框，指向系统设置
+        // 3 秒后仍未授权 → 弹一次引导框，指向系统设置（与 tap 失败路径共用去重，最多弹一次）
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self else { return }
-            if !AXIsProcessTrusted() { self.showPermissionGuide() }
+            if !AXIsProcessTrusted() { self.showPermissionGuideIfNeeded() }
         }
     }
 
@@ -268,7 +285,7 @@ final class GlobalShortcutMonitor {
 
     func reloadSuperCloseShortcut() {
         superCloseShortcut = SuperCloseShortcut.load()
-        log.info("📋 超级关闭快捷键：\\(self.superCloseShortcut.displayText, privacy: .public)")
+        log.info("📋 超级关闭快捷键：\(self.superCloseShortcut.displayText, privacy: .public)")
     }
 
     func superCloseAllApps() {
